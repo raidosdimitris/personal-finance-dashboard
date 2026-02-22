@@ -14,6 +14,17 @@ import { getCategoryColour, getAllCategories } from '../utils/categoriser'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
+function InfoTooltip({ text }) {
+  return (
+    <div className="relative group inline-block">
+      <span className="ml-1 inline-block w-4 h-4 text-center text-xs rounded-full bg-gray-200 text-gray-600 leading-4 cursor-help">?</span>
+      <div className="hidden group-hover:block absolute z-10 bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2 bg-gray-800 text-white text-xs rounded-lg shadow-lg">
+        {text}
+      </div>
+    </div>
+  )
+}
+
 export default function Dashboard({ transactions }) {
   const [dateRange, setDateRange] = useState({ start: '', end: '' })
   const [selectedCategory, setSelectedCategory] = useState('all')
@@ -72,17 +83,24 @@ export default function Dashboard({ transactions }) {
   }, [spending])
 
   // Recurring payments (same description appearing 2+ times)
-  // Fix #6: Sum all matching transactions for accurate total and average
+  // Group by month for monthly breakdown
   const recurring = useMemo(() => {
     const counts = {}
     spending.forEach((tx) => {
       const key = tx.description?.toLowerCase() || ''
-      if (!counts[key]) counts[key] = { description: tx.description, total: 0, count: 0 }
+      if (!counts[key]) counts[key] = { description: tx.description, total: 0, count: 0, months: new Set() }
       counts[key].total += Math.abs(tx.amount)
       counts[key].count++
+      const month = tx.date?.substring(0, 7)
+      if (month) counts[key].months.add(month)
     })
     return Object.values(counts)
       .filter((r) => r.count >= 2)
+      .map((r) => ({
+        ...r,
+        numMonths: r.months.size,
+        monthlyAvg: r.total / (r.months.size || 1),
+      }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 10)
   }, [spending])
@@ -183,26 +201,20 @@ export default function Dashboard({ transactions }) {
           <div className="text-sm text-gray-500">Total Income</div>
           <div className="text-2xl font-bold text-green-600">£{totalIncome.toFixed(2)}</div>
         </div>
-        <div
-          className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 cursor-help"
-          title="Net = Total Income minus Total Spending. Positive (green) means you saved money. Negative (red) means you spent more than you earned."
-        >
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
           <div className="text-sm text-gray-500">
             Net
-            <span className="ml-1 inline-block w-4 h-4 text-center text-xs rounded-full bg-gray-200 text-gray-600 leading-4">?</span>
+            <InfoTooltip text="Net = Total Income minus Total Spending. Positive (green) means you saved money. Negative (red) means you spent more than you earned." />
           </div>
           <div className={`text-2xl font-bold ${net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
             £{net.toFixed(2)}
           </div>
         </div>
         {monthComparison && (
-          <div
-            className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 cursor-help"
-            title={`Compares spending between ${monthComparison.currentMonth} and ${monthComparison.previousMonth}. Green = you spent less than last month. Red = you spent more.`}
-          >
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
             <div className="text-sm text-gray-500">
               vs Previous Month
-              <span className="ml-1 inline-block w-4 h-4 text-center text-xs rounded-full bg-gray-200 text-gray-600 leading-4">?</span>
+              <InfoTooltip text={`Compares spending between ${monthComparison.currentMonth} and ${monthComparison.previousMonth}. Green = you spent less than last month. Red = you spent more.`} />
             </div>
             <div className={`text-2xl font-bold ${monthComparison.diff <= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {monthComparison.diff > 0 ? '+' : ''}{monthComparison.pct}%
@@ -258,7 +270,7 @@ export default function Dashboard({ transactions }) {
                 <span className="text-sm text-gray-400 w-6">{i + 1}.</span>
                 <span className="text-sm font-medium">{name}</span>
               </div>
-              <span className="text-sm font-medium text-red-600">£{amount.toFixed(2)}</span>
+              <span className="text-sm text-gray-900 font-semibold">£{amount.toFixed(2)}</span>
             </div>
           ))}
         </div>
@@ -275,8 +287,8 @@ export default function Dashboard({ transactions }) {
                   <span className="text-sm font-medium">{r.description}</span>
                   <span className="text-xs text-gray-400 ml-2">({r.count} times)</span>
                 </div>
-                <span className="text-sm font-medium text-red-600">
-                  Total: £{r.total.toFixed(2)} • Avg: £{(r.total / r.count).toFixed(2)}/each
+                <span className="text-sm text-gray-900 font-semibold">
+                  £{r.monthlyAvg.toFixed(2)}/mo avg • Total: £{r.total.toFixed(2)}
                 </span>
               </div>
             ))}
