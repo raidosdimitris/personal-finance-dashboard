@@ -69,7 +69,7 @@ export default function App() {
       <div className="app-container">
         {/* ============ HEADER ============ */}
         <header className="app-header">
-          <h1 className="heading-display">💰 Personal Finance Dashboard</h1>
+          <h1 className="heading-display">Personal Finance Dashboard</h1>
           <p>Your data never leaves your browser</p>
         </header>
 

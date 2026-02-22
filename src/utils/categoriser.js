@@ -137,16 +137,16 @@ export function categoriseAll(transactions) {
 
 /** Category colours for charts */
 export const CATEGORY_COLOURS = {
-  groceries: '#22c55e',
-  transport: '#3b82f6',
-  dining: '#f97316',
-  subscriptions: '#8b5cf6',
-  utilities: '#64748b',
-  entertainment: '#ec4899',
-  shopping: '#eab308',
-  health: '#ef4444',
-  income: '#10b981',
-  transfers: '#6b7280',
+  groceries: '#34d399',
+  transport: '#818cf8',
+  dining: '#c084fc',
+  subscriptions: '#a78bfa',
+  utilities: '#94a3b8',
+  entertainment: '#f0abfc',
+  shopping: '#67e8f9',
+  health: '#fca5a5',
+  income: '#6ee7b7',
+  transfers: '#cbd5e1',
   other: '#94a3b8',
 }
 
