@@ -1,0 +1,13 @@
+{
+  "groceries": ["tesco", "sainsbury", "asda", "aldi", "lidl", "waitrose", "morrisons", "co-op", "ocado", "marks & spencer food", "m&s food", "grocery", "supermarket"],
+  "transport": ["tfl", "uber", "bolt", "lyft", "trainline", "national rail", "bus", "taxi", "petrol", "shell", "bp", "esso", "parking", "congestion"],
+  "dining": ["restaurant", "cafe", "coffee", "starbucks", "costa", "pret", "nando", "mcdonalds", "kfc", "burger king", "deliveroo", "just eat", "uber eats"],
+  "subscriptions": ["netflix", "spotify", "amazon prime", "disney+", "apple", "google storage", "icloud", "youtube premium", "gym", "membership"],
+  "utilities": ["electric", "gas", "water", "council tax", "broadband", "virgin media", "bt", "sky", "phone", "mobile", "ee", "vodafone", "three", "o2"],
+  "entertainment": ["cinema", "theatre", "concert", "ticket", "gaming", "steam", "playstation", "xbox", "book", "audible"],
+  "shopping": ["amazon", "ebay", "asos", "zara", "h&m", "primark", "john lewis", "argos", "ikea", "next", "shop"],
+  "health": ["pharmacy", "boots", "superdrug", "doctor", "dentist", "hospital", "nhs", "gym", "fitness", "prescription"],
+  "income": ["salary", "wage", "interest", "dividend", "refund", "cashback", "deposit", "credit"],
+  "transfers": ["transfer", "sent to", "received from", "standing order", "direct debit setup"],
+  "other": []
+}
