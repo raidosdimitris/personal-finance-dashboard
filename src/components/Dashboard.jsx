@@ -14,20 +14,20 @@ import { getCategoryColour, getAllCategories } from '../utils/categoriser'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
+/* ============================================================
+   InfoTooltip — Glassmorphism elevated tooltip
+   ============================================================ */
 function InfoTooltip({ text }) {
   return (
-    <div className="relative group inline-block">
-      <span className="ml-1 inline-block w-4 h-4 text-center text-xs rounded-full bg-gray-200 text-gray-600 leading-4 cursor-help">?</span>
-      <div className="hidden group-hover:block absolute z-10 bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2 bg-gray-800 text-white text-xs rounded-lg shadow-lg">
-        {text}
-      </div>
-    </div>
+    <span className="info-tooltip-wrap">
+      <span className="info-tooltip-trigger" aria-label="More information">?</span>
+      <span className="info-tooltip-content" role="tooltip">{text}</span>
+    </span>
   )
 }
 
 /**
  * Format a YYYY-MM string to a readable month label (e.g. "Jan 2025").
- * Returns the original string if parsing fails.
  */
 function formatMonth(ym) {
   if (!ym || typeof ym !== 'string') return ym || ''
@@ -40,6 +40,13 @@ function formatMonth(ym) {
   return `${monthNames[month - 1]} ${year}`
 }
 
+/* ============================================================
+   Chart.js global defaults for glassmorphism theme
+   ============================================================ */
+ChartJS.defaults.color = 'rgba(240,244,255,0.35)'
+ChartJS.defaults.borderColor = 'rgba(255,255,255,0.06)'
+ChartJS.defaults.font.family = "'DM Mono', monospace"
+
 export default function Dashboard({ transactions }) {
   const [dateRange, setDateRange] = useState({ start: '', end: '' })
   const [selectedCategory, setSelectedCategory] = useState('all')
@@ -48,7 +55,7 @@ export default function Dashboard({ transactions }) {
 
   const categories = getAllCategories()
 
-  // Filter transactions
+  /* ============ ALL LOGIC PRESERVED EXACTLY ============ */
   const filtered = useMemo(() => {
     return transactions.filter((tx) => {
       if (dateRange.start && tx.date < dateRange.start) return false
@@ -58,7 +65,6 @@ export default function Dashboard({ transactions }) {
     })
   }, [transactions, dateRange, selectedCategory])
 
-  // Spending only (negative amounts)
   const spending = filtered.filter((tx) => tx.amount < 0)
   const income = filtered.filter((tx) => tx.amount >= 0)
 
@@ -66,7 +72,6 @@ export default function Dashboard({ transactions }) {
   const totalIncome = income.reduce((sum, tx) => sum + tx.amount, 0)
   const net = totalIncome - totalSpending
 
-  // Monthly data
   const monthlyData = useMemo(() => {
     const months = {}
     spending.forEach((tx) => {
@@ -76,7 +81,6 @@ export default function Dashboard({ transactions }) {
     return Object.entries(months).sort(([a], [b]) => a.localeCompare(b))
   }, [spending])
 
-  // Category breakdown
   const categoryData = useMemo(() => {
     const cats = {}
     spending.forEach((tx) => {
@@ -85,7 +89,6 @@ export default function Dashboard({ transactions }) {
     return Object.entries(cats).sort(([, a], [, b]) => b - a)
   }, [spending])
 
-  // Top merchants
   const topMerchants = useMemo(() => {
     const merchants = {}
     spending.forEach((tx) => {
@@ -97,8 +100,6 @@ export default function Dashboard({ transactions }) {
       .slice(0, 10)
   }, [spending])
 
-  // Recurring payments (same description appearing 2+ times)
-  // Group by month for monthly breakdown
   const recurring = useMemo(() => {
     const counts = {}
     spending.forEach((tx) => {
@@ -120,7 +121,6 @@ export default function Dashboard({ transactions }) {
       .slice(0, 10)
   }, [spending])
 
-  // Previous month comparison
   const monthComparison = useMemo(() => {
     if (monthlyData.length < 2) return null
     const current = monthlyData[monthlyData.length - 1]
@@ -130,14 +130,17 @@ export default function Dashboard({ transactions }) {
     return { current: current[1], previous: previous[1], diff, pct: Number(pct), currentMonth: current[0], previousMonth: previous[0] }
   }, [monthlyData])
 
-  // Chart data
+  /* ============ CHART CONFIGS (glassmorphism themed) ============ */
   const barChartData = {
     labels: monthlyData.map(([m]) => m),
     datasets: [{
       label: 'Spending (£)',
       data: monthlyData.map(([, v]) => v),
-      backgroundColor: '#3b82f6',
-      borderRadius: 4,
+      backgroundColor: 'rgba(0,245,196,0.6)',
+      hoverBackgroundColor: 'rgba(0,245,196,0.8)',
+      borderColor: 'rgba(0,245,196,0.9)',
+      borderWidth: 1,
+      borderRadius: 6,
     }],
   }
 
@@ -147,49 +150,58 @@ export default function Dashboard({ transactions }) {
       data: categoryData.map(([, v]) => v),
       backgroundColor: categoryData.map(([c]) => getCategoryColour(c)),
       borderWidth: 2,
-      borderColor: '#fff',
+      borderColor: 'rgba(10,15,30,0.8)',
+      hoverBorderColor: '#fff',
     }],
   }
 
+  /* ============ EMPTY STATE ============ */
   if (transactions.length === 0) {
     return (
-      <div className="text-center py-12">
-        <div className="text-4xl mb-3">📊</div>
-        <h2 className="text-xl font-semibold text-gray-700">No data to display</h2>
-        <p className="text-gray-500 mt-1">Upload and categorise transactions first</p>
+      <div className="empty-state">
+        <div className="empty-icon" aria-hidden="true">📊</div>
+        <h2>No data to display</h2>
+        <p>Upload and categorise transactions first</p>
       </div>
     )
   }
 
+  /* ============ RENDER ============ */
   return (
-    <div className="space-y-6">
+    <div className="section-stack">
       {/* Filters */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-        <div className="flex flex-wrap gap-4 items-end">
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">From</label>
+      <div className="glass-panel glass-panel--static panel-body">
+        <div className="filter-bar">
+          <div className="filter-group">
+            <label className="glass-label" htmlFor="filter-from">From</label>
             <input
+              id="filter-from"
               type="date"
               value={dateRange.start}
               onChange={(e) => setDateRange((r) => ({ ...r, start: e.target.value }))}
-              className="border border-gray-300 rounded-md px-3 py-1.5 text-sm"
+              className="glass-input"
+              style={{ width: 'auto', minWidth: '160px' }}
             />
           </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">To</label>
+          <div className="filter-group">
+            <label className="glass-label" htmlFor="filter-to">To</label>
             <input
+              id="filter-to"
               type="date"
               value={dateRange.end}
               onChange={(e) => setDateRange((r) => ({ ...r, end: e.target.value }))}
-              className="border border-gray-300 rounded-md px-3 py-1.5 text-sm"
+              className="glass-input"
+              style={{ width: 'auto', minWidth: '160px' }}
             />
           </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Category</label>
+          <div className="filter-group">
+            <label className="glass-label" htmlFor="filter-cat">Category</label>
             <select
+              id="filter-cat"
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="border border-gray-300 rounded-md px-3 py-1.5 text-sm capitalize"
+              className="glass-select"
+              style={{ width: 'auto', minWidth: '180px', textTransform: 'capitalize' }}
             >
               <option value="all">All Categories</option>
               {categories.map((c) => (
@@ -199,7 +211,7 @@ export default function Dashboard({ transactions }) {
           </div>
           <button
             onClick={() => { setDateRange({ start: '', end: '' }); setSelectedCategory('all') }}
-            className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-md"
+            className="btn btn-ghost"
           >
             Clear Filters
           </button>
@@ -207,34 +219,38 @@ export default function Dashboard({ transactions }) {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div className="text-sm text-gray-500">Total Spending</div>
-          <div className="text-2xl font-bold text-red-600">£{totalSpending.toFixed(2)}</div>
+      <div className="kpi-grid">
+        <div className="glass-panel glass-panel--accent kpi-card">
+          <div className="kpi-label">Total Spending</div>
+          <div className="kpi-value kpi-value--danger text-mono">
+            <span className="value-negative">£{totalSpending.toFixed(2)}</span>
+          </div>
         </div>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div className="text-sm text-gray-500">Total Income</div>
-          <div className="text-2xl font-bold text-green-600">£{totalIncome.toFixed(2)}</div>
+        <div className="glass-panel glass-panel--accent kpi-card">
+          <div className="kpi-label">Total Income</div>
+          <div className="kpi-value kpi-value--success text-mono">
+            <span className="value-positive">£{totalIncome.toFixed(2)}</span>
+          </div>
         </div>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div className="text-sm text-gray-500">
+        <div className="glass-panel glass-panel--accent kpi-card">
+          <div className="kpi-label">
             Net
             <InfoTooltip text="Net = Total Income minus Total Spending. Positive (green) means you saved money. Negative (red) means you spent more than you earned." />
           </div>
-          <div className={`text-2xl font-bold ${net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+          <div className="kpi-value text-mono" style={{ color: net >= 0 ? 'var(--success)' : 'var(--danger)' }}>
             £{net.toFixed(2)}
           </div>
         </div>
         {monthComparison && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <div className="text-sm text-gray-500">
+          <div className="glass-panel glass-panel--accent kpi-card">
+            <div className="kpi-label">
               vs Previous Month
               <InfoTooltip text={`Compares spending between ${formatMonth(monthComparison.currentMonth)} (£${monthComparison.current.toFixed(2)}) and ${formatMonth(monthComparison.previousMonth)} (£${monthComparison.previous.toFixed(2)}). Negative (green) = you spent less than last month. Positive (red) = you spent more.`} />
             </div>
-            <div className={`text-2xl font-bold ${monthComparison.pct <= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            <div className="kpi-value text-mono" style={{ color: monthComparison.pct <= 0 ? 'var(--success)' : 'var(--danger)' }}>
               {monthComparison.pct > 0 ? '+' : ''}{monthComparison.pct.toFixed(1)}%
             </div>
-            <div className="text-xs text-gray-400 mt-1">
+            <div className="kpi-sublabel">
               {formatMonth(monthComparison.currentMonth)} vs {formatMonth(monthComparison.previousMonth)}
             </div>
           </div>
@@ -242,35 +258,72 @@ export default function Dashboard({ transactions }) {
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="charts-grid">
         {/* Spending Over Time */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold mb-4">Spending Over Time</h3>
-          <div id="bar-chart">
+        <div className="glass-panel glass-panel--static chart-container">
+          <h3>Spending Over Time</h3>
+          <div className="chart-wrap" id="bar-chart">
             <Bar
               ref={barRef}
               data={barChartData}
               options={{
                 responsive: true,
-                plugins: { legend: { display: false } },
-                scales: { y: { beginAtZero: true, ticks: { callback: (v) => `£${v}` } } },
+                plugins: {
+                  legend: { display: false },
+                  tooltip: {
+                    backgroundColor: 'rgba(13,27,62,0.95)',
+                    borderColor: 'rgba(255,255,255,0.12)',
+                    borderWidth: 1,
+                    titleFont: { family: "'DM Mono', monospace" },
+                    bodyFont: { family: "'DM Mono', monospace" },
+                    padding: 12,
+                    cornerRadius: 8,
+                  },
+                },
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    ticks: { callback: (v) => `£${v}` },
+                    grid: { color: 'rgba(255,255,255,0.06)' },
+                  },
+                  x: {
+                    grid: { color: 'rgba(255,255,255,0.06)' },
+                  },
+                },
               }}
             />
           </div>
         </div>
 
         {/* Category Breakdown */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold mb-4">Category Breakdown</h3>
-          <div id="donut-chart" className="max-w-sm mx-auto">
+        <div className="glass-panel glass-panel--static chart-container">
+          <h3>Category Breakdown</h3>
+          <div className="chart-wrap chart-wrap--donut" id="donut-chart">
             <Doughnut
               ref={donutRef}
               data={donutChartData}
               options={{
                 responsive: true,
                 plugins: {
-                  legend: { position: 'bottom', labels: { boxWidth: 12 } },
-                  tooltip: { callbacks: { label: (ctx) => `${ctx.label}: £${ctx.raw.toFixed(2)}` } },
+                  legend: {
+                    position: 'bottom',
+                    labels: {
+                      boxWidth: 12,
+                      padding: 16,
+                      color: 'rgba(240,244,255,0.6)',
+                      font: { family: "'Outfit', sans-serif", size: 11 },
+                    },
+                  },
+                  tooltip: {
+                    backgroundColor: 'rgba(13,27,62,0.95)',
+                    borderColor: 'rgba(255,255,255,0.12)',
+                    borderWidth: 1,
+                    titleFont: { family: "'DM Mono', monospace" },
+                    bodyFont: { family: "'DM Mono', monospace" },
+                    padding: 12,
+                    cornerRadius: 8,
+                    callbacks: { label: (ctx) => `${ctx.label}: £${ctx.raw.toFixed(2)}` },
+                  },
                 },
               }}
             />
@@ -280,23 +333,20 @@ export default function Dashboard({ transactions }) {
 
       {/* Top Categories */}
       {categoryData.length > 0 && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold mb-4">Top Categories</h3>
-          <div className="space-y-2">
+        <div className="glass-panel glass-panel--static panel-body">
+          <h3 className="section-title" style={{ marginBottom: '1rem' }}>Top Categories</h3>
+          <div>
             {categoryData.map(([name, amount]) => {
               const pct = totalSpending > 0 ? ((amount / totalSpending) * 100).toFixed(1) : 0
               return (
-                <div key={name} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="w-3 h-3 rounded-full inline-block flex-shrink-0"
-                      style={{ backgroundColor: getCategoryColour(name) }}
-                    />
-                    <span className="text-sm font-medium capitalize">{name}</span>
+                <div key={name} className="rank-row">
+                  <div className="rank-left">
+                    <span className="rank-dot" style={{ backgroundColor: getCategoryColour(name) }} aria-hidden="true" />
+                    <span className="rank-name">{name}</span>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-gray-400">{pct}%</span>
-                    <span className="text-sm text-gray-900 font-semibold w-24 text-right">£{amount.toFixed(2)}</span>
+                  <div className="rank-right">
+                    <span className="rank-pct">{pct}%</span>
+                    <span className="rank-amount">£{amount.toFixed(2)}</span>
                   </div>
                 </div>
               )
@@ -306,20 +356,20 @@ export default function Dashboard({ transactions }) {
       )}
 
       {/* Top Merchants */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold mb-4">Top Merchants</h3>
-        <div className="space-y-2">
+      <div className="glass-panel glass-panel--static panel-body">
+        <h3 className="section-title" style={{ marginBottom: '1rem' }}>Top Merchants</h3>
+        <div>
           {topMerchants.map(([name, amount], i) => {
             const pct = totalSpending > 0 ? ((amount / totalSpending) * 100).toFixed(1) : 0
             return (
-              <div key={name} className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-400 w-6">{i + 1}.</span>
-                  <span className="text-sm font-medium">{name}</span>
+              <div key={name} className="rank-row">
+                <div className="rank-left">
+                  <span className="rank-num">{i + 1}.</span>
+                  <span className="rank-name" style={{ textTransform: 'none' }}>{name}</span>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-gray-400">{pct}%</span>
-                  <span className="text-sm text-gray-900 font-semibold w-24 text-right">£{amount.toFixed(2)}</span>
+                <div className="rank-right">
+                  <span className="rank-pct">{pct}%</span>
+                  <span className="rank-amount">£{amount.toFixed(2)}</span>
                 </div>
               </div>
             )
@@ -329,19 +379,19 @@ export default function Dashboard({ transactions }) {
 
       {/* Recurring Payments */}
       {recurring.length > 0 && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold mb-4">
+        <div className="glass-panel glass-panel--static panel-body">
+          <h3 className="section-title" style={{ marginBottom: '1rem' }}>
             🔄 Recurring Payments
             <InfoTooltip text="Payments are classified as recurring when the same merchant appears 2 or more times in your transaction history." />
           </h3>
-          <div className="space-y-2">
+          <div>
             {recurring.map((r) => (
-              <div key={r.description} className="flex items-center justify-between">
+              <div key={r.description} className="recurring-row">
                 <div>
-                  <span className="text-sm font-medium">{r.description}</span>
-                  <span className="text-xs text-gray-400 ml-2">({r.count} times)</span>
+                  <span className="recurring-name">{r.description}</span>
+                  <span className="recurring-count">({r.count} times)</span>
                 </div>
-                <span className="text-sm text-gray-900 font-semibold">
+                <span className="recurring-amounts">
                   £{r.monthlyAvg.toFixed(2)}/mo avg • Total: £{r.total.toFixed(2)}
                 </span>
               </div>
