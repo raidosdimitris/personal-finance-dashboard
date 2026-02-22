@@ -9,14 +9,15 @@ import {
   getCategoryColour,
 } from '../utils/categoriser'
 
+/* ============================================================
+   InfoTooltip — Glassmorphism elevated tooltip
+   ============================================================ */
 function InfoTooltip({ text }) {
   return (
-    <div className="relative group inline-block">
-      <span className="ml-1 inline-block w-4 h-4 text-center text-xs rounded-full bg-gray-200 text-gray-600 leading-4 cursor-help">?</span>
-      <div className="hidden group-hover:block absolute z-10 bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2 bg-gray-800 text-white text-xs rounded-lg shadow-lg">
-        {text}
-      </div>
-    </div>
+    <span className="info-tooltip-wrap">
+      <span className="info-tooltip-trigger" aria-label="More information">?</span>
+      <span className="info-tooltip-content" role="tooltip">{text}</span>
+    </span>
   )
 }
 
@@ -28,7 +29,7 @@ export default function Categorise({ transactions, categorisedTransactions, setC
   const [newKeyword, setNewKeyword] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
 
-  // Re-categorise when transactions change
+  /* ============ ALL JS LOGIC PRESERVED EXACTLY ============ */
   useEffect(() => {
     if (transactions.length > 0 && categorisedTransactions.length === 0) {
       setCategorisedTransactions(categoriseAll(transactions))
@@ -48,7 +49,6 @@ export default function Categorise({ transactions, categorisedTransactions, setC
     setCategories(updated)
     const customCats = loadCustomCategories()
     saveCustomCategories([...customCats, name])
-    // Add empty rule
     const newRules = { ...rules, [name]: [] }
     setRules(newRules)
     saveRules(newRules)
@@ -64,7 +64,6 @@ export default function Categorise({ transactions, categorisedTransactions, setC
     setRules(updatedRules)
     saveRules(updatedRules)
     setNewKeyword('')
-    // Re-categorise
     setCategorisedTransactions(categoriseAll(transactions))
   }
 
@@ -78,12 +77,10 @@ export default function Categorise({ transactions, categorisedTransactions, setC
   }
 
   const recategoriseAll = () => {
-    // Reset categories and re-apply rules
     const reset = transactions.map((tx) => ({ ...tx, category: '' }))
     setCategorisedTransactions(categoriseAll(reset))
   }
 
-  // Filtered transactions based on search query
   const filteredTransactions = useMemo(() => {
     if (!searchQuery.trim()) return categorisedTransactions
     const q = searchQuery.toLowerCase()
@@ -93,12 +90,13 @@ export default function Categorise({ transactions, categorisedTransactions, setC
     )
   }, [categorisedTransactions, searchQuery])
 
+  /* ============ EMPTY STATE ============ */
   if (transactions.length === 0) {
     return (
-      <div className="text-center py-12">
-        <div className="text-4xl mb-3">🏷️</div>
-        <h2 className="text-xl font-semibold text-gray-700">No transactions to categorise</h2>
-        <p className="text-gray-500 mt-1">Upload a bank statement first</p>
+      <div className="empty-state">
+        <div className="empty-icon" aria-hidden="true">🏷️</div>
+        <h2>No transactions to categorise</h2>
+        <p>Upload a bank statement first</p>
       </div>
     )
   }
@@ -108,27 +106,25 @@ export default function Categorise({ transactions, categorisedTransactions, setC
     return acc
   }, {})
 
+  /* ============ RENDER ============ */
   return (
-    <div className="space-y-6">
+    <div className="section-stack">
       {/* Category Summary */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold">
+      <div className="glass-panel glass-panel--static panel-body">
+        <div className="section-header">
+          <h2 className="section-title">
             Category Summary
             <InfoTooltip text="Categories are automatically assigned based on keyword rules. You can add custom categories and then change individual transactions to use them." />
           </h2>
-          <button
-            onClick={recategoriseAll}
-            className="px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
-          >
+          <button onClick={recategoriseAll} className="btn btn-primary">
             🔄 Re-categorise All
           </button>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="category-wrap">
           {categories.map((cat) => (
             <span
               key={cat}
-              className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium text-white"
+              className="badge-category"
               style={{ backgroundColor: getCategoryColour(cat) }}
             >
               {cat} ({categoryCounts[cat] || 0})
@@ -138,81 +134,79 @@ export default function Categorise({ transactions, categorisedTransactions, setC
       </div>
 
       {/* Add Custom Category */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold mb-3">Custom Categories</h3>
+      <div className="glass-panel glass-panel--static panel-body">
+        <h3 className="section-title" style={{ marginBottom: '0.75rem' }}>Custom Categories</h3>
         <div className="flex gap-2">
           <input
             type="text"
             value={newCategory}
             onChange={(e) => setNewCategory(e.target.value)}
             placeholder="New category name..."
-            className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm"
+            className="glass-input flex-1"
             onKeyDown={(e) => e.key === 'Enter' && addCustomCategory()}
+            aria-label="New category name"
           />
-          <button
-            onClick={addCustomCategory}
-            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium"
-          >
+          <button onClick={addCustomCategory} className="btn btn-success">
             + Add
           </button>
         </div>
       </div>
 
       {/* Category Rules Editor */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold mb-3">
+      <div className="glass-panel glass-panel--static panel-body">
+        <h3 className="section-title" style={{ marginBottom: '0.75rem' }}>
           Category Rules (Keywords)
           <InfoTooltip text="Keywords are used to automatically categorise transactions. Default keywords match common merchant names. Click a category to see its keywords, and add your own to improve categorisation accuracy." />
         </h3>
-        <div className="space-y-3">
+        <div className="section-stack" style={{ gap: '0.5rem' }}>
           {categories.filter((c) => c !== 'other').map((cat) => (
-            <div key={cat} className="border border-gray-100 rounded-lg p-3">
+            <div key={cat} className="rule-accordion">
               <div
-                className="flex items-center justify-between cursor-pointer"
+                className="rule-accordion-header"
                 onClick={() => setEditingRule(editingRule === cat ? null : cat)}
+                role="button"
+                tabIndex={0}
+                aria-expanded={editingRule === cat}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditingRule(editingRule === cat ? null : cat) } }}
               >
-                <span className="font-medium capitalize flex items-center gap-2">
+                <span className="cat-name">
                   <span
-                    className="w-3 h-3 rounded-full inline-block"
+                    className="rank-dot"
                     style={{ backgroundColor: getCategoryColour(cat) }}
+                    aria-hidden="true"
                   />
                   {cat}
                 </span>
-                <span className="text-gray-400 text-sm">
+                <span className="cat-count">
                   {(rules[cat] || []).length} keywords {editingRule === cat ? '▲' : '▼'}
                 </span>
               </div>
               {editingRule === cat && (
-                <div className="mt-3">
-                  <div className="flex flex-wrap gap-1 mb-2">
+                <div className="rule-accordion-body">
+                  <div className="keyword-list">
                     {(rules[cat] || []).map((kw) => (
-                      <span
-                        key={kw}
-                        className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded"
-                      >
+                      <span key={kw} className="keyword-tag">
                         {kw}
                         <button
                           onClick={() => removeKeyword(cat, kw)}
-                          className="text-red-400 hover:text-red-600 ml-1"
+                          aria-label={`Remove keyword ${kw}`}
                         >
                           ×
                         </button>
                       </span>
                     ))}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="keyword-add-row">
                     <input
                       type="text"
                       value={newKeyword}
                       onChange={(e) => setNewKeyword(e.target.value)}
                       placeholder="Add keyword..."
-                      className="flex-1 border border-gray-300 rounded-md px-2 py-1 text-sm"
+                      className="glass-input flex-1"
                       onKeyDown={(e) => e.key === 'Enter' && addKeyword(cat)}
+                      aria-label={`Add keyword for ${cat}`}
                     />
-                    <button
-                      onClick={() => addKeyword(cat)}
-                      className="px-3 py-1 bg-blue-500 text-white rounded-md text-sm"
-                    >
+                    <button onClick={() => addKeyword(cat)} className="btn btn-primary" style={{ padding: '0.375rem 1rem' }}>
                       Add
                     </button>
                   </div>
@@ -224,52 +218,54 @@ export default function Categorise({ transactions, categorisedTransactions, setC
       </div>
 
       {/* Transaction List with Category Override */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <div className="p-4 border-b border-gray-200">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-lg font-semibold">Transactions ({categorisedTransactions.length})</h3>
-            {searchQuery && (
-              <span className="text-sm text-gray-500">
-                Showing {filteredTransactions.length} of {categorisedTransactions.length} transactions
-              </span>
-            )}
+      <div className="glass-panel glass-panel--static" style={{ overflow: 'hidden' }}>
+        <div className="panel-body" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className="section-header">
+            <div>
+              <h3 className="section-title">Transactions ({categorisedTransactions.length})</h3>
+              {searchQuery && (
+                <span className="section-subtitle">
+                  Showing {filteredTransactions.length} of {categorisedTransactions.length} transactions
+                </span>
+              )}
+            </div>
           </div>
-          <p className="text-sm text-gray-500 mb-3">Click a category to change it</p>
+          <p className="section-subtitle mb-3">Click a category to change it</p>
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by description or category..."
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+            className="search-input"
+            aria-label="Search transactions"
           />
         </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+        <div className="glass-table-wrap">
+          <table className="glass-table">
+            <thead>
               <tr>
                 {['Date', 'Description', 'Amount', 'Category'].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    {h}
-                  </th>
+                  <th key={h} scope="col">{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody>
               {filteredTransactions.slice(0, 100).map((tx) => (
                 <tr key={tx.id}>
-                  <td className="px-4 py-3 text-sm whitespace-nowrap">{tx.date}</td>
-                  <td className="px-4 py-3 text-sm max-w-xs truncate">{tx.description}</td>
-                  <td className={`px-4 py-3 text-sm font-medium whitespace-nowrap ${
-                    tx.amount >= 0 ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    £{tx.amount.toFixed(2)}
+                  <td>{tx.date}</td>
+                  <td className="truncate-cell">{tx.description}</td>
+                  <td style={{ fontWeight: 500 }}>
+                    <span className={tx.amount >= 0 ? 'value-positive' : 'value-negative'}>
+                      £{tx.amount.toFixed(2)}
+                    </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <select
                       value={tx.category}
                       onChange={(e) => handleCategoryChange(tx.id, e.target.value)}
-                      className="text-sm border border-gray-200 rounded px-2 py-1 capitalize"
+                      className="cat-select"
                       style={{ color: getCategoryColour(tx.category) }}
+                      aria-label={`Category for ${tx.description}`}
                     >
                       {categories.map((cat) => (
                         <option key={cat} value={cat}>{cat}</option>
@@ -282,7 +278,7 @@ export default function Categorise({ transactions, categorisedTransactions, setC
           </table>
         </div>
         {filteredTransactions.length > 100 && (
-          <div className="p-3 text-center text-sm text-gray-500 bg-gray-50">
+          <div className="table-footer-info">
             Showing first 100 of {filteredTransactions.length} transactions
           </div>
         )}

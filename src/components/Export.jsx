@@ -17,12 +17,12 @@ import { getCategoryColour } from '../utils/categoriser'
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
 export default function Export({ transactions }) {
+  /* ============ ALL LOGIC PRESERVED EXACTLY ============ */
   const spending = transactions.filter((tx) => tx.amount < 0)
   const totalSpending = spending.reduce((sum, tx) => sum + Math.abs(tx.amount), 0)
   const totalIncome = transactions.filter((tx) => tx.amount >= 0).reduce((sum, tx) => sum + tx.amount, 0)
   const net = totalIncome - totalSpending
 
-  // Compute chart data for offscreen rendering
   const monthlyData = useMemo(() => {
     const months = {}
     spending.forEach((tx) => {
@@ -51,7 +51,6 @@ export default function Export({ transactions }) {
       .slice(0, 10)
   }, [spending])
 
-  // Timeframe
   const timeframe = useMemo(() => {
     const dates = transactions.map((tx) => tx.date).filter(Boolean).sort()
     if (dates.length === 0) return null
@@ -96,10 +95,6 @@ export default function Export({ transactions }) {
     URL.revokeObjectURL(url)
   }
 
-  /**
-   * Render chart to an offscreen canvas using Chart.js directly,
-   * so export works even when Dashboard tab is not mounted.
-   */
   const downloadChartPNG = (chartType, filename) => {
     const canvas = document.createElement('canvas')
     canvas.width = 800
@@ -135,9 +130,6 @@ export default function Export({ transactions }) {
     chart.destroy()
   }
 
-  /**
-   * Render a chart to an offscreen canvas and return its data URL.
-   */
   const renderChartToDataURL = (chartType, width, height) => {
     const canvas = document.createElement('canvas')
     canvas.width = width
@@ -145,7 +137,6 @@ export default function Export({ transactions }) {
 
     const data = chartType === 'bar' ? barChartData : donutChartData
 
-    // Custom plugin to draw percentage labels on donut slices
     const percentageLabelPlugin = {
       id: 'percentageLabels',
       afterDraw(chart) {
@@ -157,7 +148,7 @@ export default function Export({ transactions }) {
         meta.data.forEach((arc, i) => {
           const value = chart.data.datasets[0].data[i]
           const pct = total > 0 ? ((value / total) * 100).toFixed(1) : 0
-          if (pct < 3) return // Skip tiny slices
+          if (pct < 3) return
 
           const { x, y } = arc.tooltipPosition()
           ctx.save()
@@ -204,26 +195,22 @@ export default function Export({ transactions }) {
   const downloadPDF = () => {
     const doc = new jsPDF()
 
-    // Title
     doc.setFontSize(20)
     doc.text('Personal Finance Report', 14, 20)
     doc.setFontSize(10)
     doc.setTextColor(100, 100, 100)
     doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 28)
 
-    // Timeframe
     if (timeframe) {
       doc.text(`Timeframe: ${timeframe.earliest} to ${timeframe.latest}`, 14, 34)
     }
 
-    // Summary
     doc.setFontSize(14)
     doc.setTextColor(0, 0, 0)
     doc.text('Summary', 14, 46)
     doc.setFontSize(10)
     doc.text(`Total Transactions: ${transactions.length}`, 14, 54)
 
-    // Income — label in black, value in green
     const incomeLabel = 'Total Income: '
     doc.setTextColor(0, 0, 0)
     doc.text(incomeLabel, 14, 60)
@@ -231,7 +218,6 @@ export default function Export({ transactions }) {
     doc.setTextColor(34, 197, 94)
     doc.text(`£${totalIncome.toFixed(2)}`, 14 + incomeLabelWidth, 60)
 
-    // Spending — label in black, value in red
     const spendingLabel = 'Total Spending: '
     doc.setTextColor(0, 0, 0)
     doc.text(spendingLabel, 14, 66)
@@ -239,7 +225,6 @@ export default function Export({ transactions }) {
     doc.setTextColor(239, 68, 68)
     doc.text(`£${totalSpending.toFixed(2)}`, 14 + spendingLabelWidth, 66)
 
-    // Net — label in black, value in green/red
     const netLabel = 'Net (Income - Spending): '
     const netColor = net >= 0 ? [34, 197, 94] : [239, 68, 68]
     doc.setTextColor(0, 0, 0)
@@ -248,7 +233,6 @@ export default function Export({ transactions }) {
     doc.setTextColor(...netColor)
     doc.text(`£${net.toFixed(2)}`, 14 + netLabelWidth, 72)
 
-    // "You saved" / "You overspent" line — font size 10 to match
     doc.setFontSize(10)
     if (net >= 0) {
       const savedLabel = 'You saved '
@@ -266,7 +250,6 @@ export default function Export({ transactions }) {
       doc.text(`£${Math.abs(net).toFixed(2)}`, 14 + overspentLabelWidth, 78)
     }
 
-    // Category breakdown
     doc.setTextColor(0, 0, 0)
     doc.setFontSize(14)
     doc.text('Spending by Category', 14, 92)
@@ -291,7 +274,6 @@ export default function Export({ transactions }) {
       headStyles: { fillColor: [59, 130, 246] },
     })
 
-    // Top 10 Merchants
     let currentY = doc.lastAutoTable.finalY + 10
     if (currentY > 250) {
       doc.addPage()
@@ -314,7 +296,6 @@ export default function Export({ transactions }) {
       headStyles: { fillColor: [59, 130, 246] },
     })
 
-    // Charts page
     doc.addPage()
     doc.setFontSize(14)
     doc.setTextColor(0, 0, 0)
@@ -334,53 +315,48 @@ export default function Export({ transactions }) {
     doc.save(`finance-report-${new Date().toISOString().split('T')[0]}.pdf`)
   }
 
+  /* ============ EMPTY STATE ============ */
   if (transactions.length === 0) {
     return (
-      <div className="text-center py-12">
-        <div className="text-4xl mb-3">💾</div>
-        <h2 className="text-xl font-semibold text-gray-700">No data to export</h2>
-        <p className="text-gray-500 mt-1">Upload and categorise transactions first</p>
+      <div className="empty-state">
+        <div className="empty-icon" aria-hidden="true">💾</div>
+        <h2>No data to export</h2>
+        <p>Upload and categorise transactions first</p>
       </div>
     )
   }
 
+  /* ============ RENDER ============ */
   return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h2 className="text-xl font-semibold mb-6">Export Your Data</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div className="section-stack">
+      <div className="glass-panel glass-panel--static panel-body">
+        <h2 className="section-title" style={{ marginBottom: '1.5rem' }}>Export Your Data</h2>
+        <div className="export-grid">
           {/* CSV Export */}
-          <div className="border border-gray-200 rounded-lg p-6 text-center hover:border-blue-300 transition-colors">
-            <div className="text-3xl mb-3">📄</div>
-            <h3 className="font-semibold text-gray-900">CSV Export</h3>
-            <p className="text-sm text-gray-500 mt-1 mb-4">
-              Download cleaned & categorised transactions as a CSV file
-            </p>
-            <button
-              onClick={downloadCSV}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
-            >
+          <div className="export-card">
+            <div className="export-icon" aria-hidden="true">📄</div>
+            <h3>CSV Export</h3>
+            <p>Download cleaned & categorised transactions as a CSV file</p>
+            <button onClick={downloadCSV} className="btn btn-export-csv w-full">
               Download CSV
             </button>
           </div>
 
           {/* Chart PNG */}
-          <div className="border border-gray-200 rounded-lg p-6 text-center hover:border-blue-300 transition-colors">
-            <div className="text-3xl mb-3">📊</div>
-            <h3 className="font-semibold text-gray-900">Chart Images</h3>
-            <p className="text-sm text-gray-500 mt-1 mb-4">
-              Download charts as PNG images
-            </p>
-            <div className="space-y-2">
+          <div className="export-card">
+            <div className="export-icon" aria-hidden="true">📊</div>
+            <h3>Chart Images</h3>
+            <p>Download charts as PNG images</p>
+            <div className="btn-stack">
               <button
                 onClick={() => downloadChartPNG('bar', 'spending-over-time')}
-                className="w-full px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium"
+                className="btn btn-export-bar w-full"
               >
                 Bar Chart PNG
               </button>
               <button
                 onClick={() => downloadChartPNG('doughnut', 'category-breakdown')}
-                className="w-full px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 text-sm font-medium"
+                className="btn btn-export-donut w-full"
               >
                 Donut Chart PNG
               </button>
@@ -388,16 +364,11 @@ export default function Export({ transactions }) {
           </div>
 
           {/* PDF Report */}
-          <div className="border border-gray-200 rounded-lg p-6 text-center hover:border-blue-300 transition-colors">
-            <div className="text-3xl mb-3">📑</div>
-            <h3 className="font-semibold text-gray-900">PDF Report</h3>
-            <p className="text-sm text-gray-500 mt-1 mb-4">
-              Generate a detailed summary report
-            </p>
-            <button
-              onClick={downloadPDF}
-              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium"
-            >
+          <div className="export-card">
+            <div className="export-icon" aria-hidden="true">📑</div>
+            <h3>PDF Report</h3>
+            <p>Generate a detailed summary report</p>
+            <button onClick={downloadPDF} className="btn btn-export-pdf w-full">
               Download PDF
             </button>
           </div>
@@ -405,15 +376,13 @@ export default function Export({ transactions }) {
       </div>
 
       {/* Quick Stats */}
-      <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 text-sm text-gray-600">
-        <p>
-          📊 <strong>{transactions.length}</strong> transactions ready to export •
-          Income: <strong className="text-green-600">£{totalIncome.toFixed(2)}</strong> •
-          Spending: <strong className="text-red-600">£{totalSpending.toFixed(2)}</strong>
-          {timeframe && (
-            <span> • Period: <strong>{timeframe.earliest}</strong> to <strong>{timeframe.latest}</strong></span>
-          )}
-        </p>
+      <div className="quick-stats">
+        📊 <strong>{transactions.length}</strong> transactions ready to export •{' '}
+        Income: <strong className="qs-income">£{totalIncome.toFixed(2)}</strong> •{' '}
+        Spending: <strong className="qs-spending">£{totalSpending.toFixed(2)}</strong>
+        {timeframe && (
+          <span> • Period: <strong>{timeframe.earliest}</strong> to <strong>{timeframe.latest}</strong></span>
+        )}
       </div>
     </div>
   )

@@ -12,14 +12,11 @@ export default function UploadClean({ transactions, setTransactions, setCategori
   const [stats, setStats] = useState(null)
   const [error, setError] = useState(null)
   const [validationInfo, setValidationInfo] = useState(null)
-  const [issueFilter, setIssueFilter] = useState('all') // 'all' | 'issues' | 'no-issues'
+  const [issueFilter, setIssueFilter] = useState('all')
 
-  // Multi-file state: each entry tracks one uploaded file
-  // { id, name, status: 'detected'|'needs-mapping'|'mapped', bank, rawHeaders, rawData,
-  //   columnMapping, bankName, transactions (raw mapped), txCount }
   const [uploadedFiles, setUploadedFiles] = useState([])
 
-  // Recompute combined transactions from all mapped files
+  /* ============ PROCESSING LOGIC (unchanged) ============ */
   const finishProcessing = useCallback((files) => {
     const allMapped = files
       .filter((f) => f.status === 'detected' || f.status === 'mapped')
@@ -44,7 +41,6 @@ export default function UploadClean({ transactions, setTransactions, setCategori
     const bank = detectBank(headers)
 
     if (!bank) {
-      // Needs manual mapping
       setUploadedFiles((prev) => {
         const updated = prev.map((f) =>
           f.id === fileEntry.id
@@ -64,7 +60,6 @@ export default function UploadClean({ transactions, setTransactions, setCategori
       return
     }
 
-    // Auto-detected
     const mapped = rows
       .filter((row) => Object.values(row).some((v) => v && v.toString().trim()))
       .map((row) => ({ ...mapTransaction(row, bank), sourceFile: fileEntry.name }))
@@ -92,7 +87,6 @@ export default function UploadClean({ transactions, setTransactions, setCategori
             }
           : f
       )
-      // Auto-process: recompute combined transactions
       setTimeout(() => finishProcessing(updated), 0)
       return updated
     })
@@ -115,7 +109,6 @@ export default function UploadClean({ transactions, setTransactions, setCategori
         return prev
       }
 
-      // Validate and convert mapped data
       let dateConversions = 0
       let amountConversions = 0
       let dateErrors = 0
@@ -159,7 +152,6 @@ export default function UploadClean({ transactions, setTransactions, setCategori
         Bank: bankName && bankName.trim() ? bankName.trim() : 'Manual',
       }
 
-      // Build validation feedback
       const validationParts = []
       if (dateConversions > 0) {
         validationParts.push(`${dateConversions} date(s) converted from serial/alternate format`)
@@ -268,10 +260,7 @@ export default function UploadClean({ transactions, setTransactions, setCategori
     setUploadedFiles((prev) =>
       prev.map((f) =>
         f.id === fileId
-          ? {
-              ...f,
-              columnMapping: { ...f.columnMapping, [field]: value },
-            }
+          ? { ...f, columnMapping: { ...f.columnMapping, [field]: value } }
           : f
       )
     )
@@ -295,48 +284,41 @@ export default function UploadClean({ transactions, setTransactions, setCategori
     if (e.target.files.length > 0) {
       handleMultipleFiles(e.target.files)
     }
-    // Reset so the same file(s) can be re-uploaded
     e.target.value = ''
   }
 
   const totalTransactions = uploadedFiles.reduce((sum, f) => sum + f.txCount, 0)
   const needsMapping = uploadedFiles.filter((f) => f.status === 'needs-mapping')
 
-  // Apply issue filter to transactions for preview
   const filteredTransactions = transactions.filter((tx) => {
     if (issueFilter === 'issues') return tx.issues?.length > 0
     if (issueFilter === 'no-issues') return !tx.issues || tx.issues.length === 0
     return true
   })
 
+  /* ============ RENDER ============ */
   return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h2 className="text-xl font-semibold mb-4">Upload Bank Statements</h2>
+    <div className="section-stack">
+      {/* Upload Panel */}
+      <div className="glass-panel glass-panel--static panel-body">
+        <h2 className="section-title" style={{ marginBottom: '1rem' }}>Upload Bank Statements</h2>
 
         {/* Drop zone */}
         <div
-          onDragOver={(e) => {
-            e.preventDefault()
-            setDragOver(true)
-          }}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
           onDragLeave={() => setDragOver(false)}
           onDrop={onDrop}
-          className={`border-2 border-dashed rounded-lg p-12 text-center transition-colors cursor-pointer ${
-            dragOver ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'
-          }`}
           onClick={() => document.getElementById('file-input').click()}
+          className={`drop-zone ${dragOver ? 'drop-zone--active' : ''}`}
+          role="button"
+          tabIndex={0}
+          aria-label="Upload bank statement files. Drag and drop or click to browse."
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); document.getElementById('file-input').click() } }}
         >
-          <div className="text-4xl mb-3">📁</div>
-          <p className="text-lg font-medium text-gray-700">
-            Drag & drop your bank statements here
-          </p>
-          <p className="text-sm text-gray-500 mt-1">
-            Supports CSV and Excel files from Monzo, Starling, Revolut, HSBC, Barclays, Nationwide
-          </p>
-          <p className="text-xs text-gray-400 mt-2">
-            Upload multiple files at once — or add more files later
-          </p>
+          <div className="drop-icon" aria-hidden="true">📁</div>
+          <p className="drop-title">Drag & drop your bank statements here</p>
+          <p className="drop-subtitle">Supports CSV and Excel files from Monzo, Starling, Revolut, HSBC, Barclays, Nationwide</p>
+          <p className="drop-hint">Upload multiple files at once — or add more files later</p>
           <input
             id="file-input"
             type="file"
@@ -344,47 +326,49 @@ export default function UploadClean({ transactions, setTransactions, setCategori
             multiple
             onChange={onFileInput}
             className="hidden"
+            aria-hidden="true"
+            tabIndex={-1}
           />
         </div>
 
         {error && (
-          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-            ⚠️ {error}
+          <div className="alert alert-error mt-4" role="alert">
+            <span aria-hidden="true">⚠️</span> {error}
           </div>
         )}
 
         {validationInfo && (
-          <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-700 text-sm">
-            🔧 {validationInfo}
+          <div className="alert alert-warning mt-4" role="status">
+            <span aria-hidden="true">🔧</span> {validationInfo}
           </div>
         )}
       </div>
 
       {/* Uploaded Files List */}
       {uploadedFiles.length > 0 && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold mb-3">
+        <div className="glass-panel glass-panel--static panel-body">
+          <h3 className="section-title">
             Uploaded Files ({uploadedFiles.length})
             {totalTransactions > 0 && (
-              <span className="text-sm font-normal text-gray-500 ml-2">
+              <span className="section-subtitle ml-2">
                 — {totalTransactions} total transactions
               </span>
             )}
           </h3>
-          <div className="space-y-3">
+          <div className="section-stack" style={{ gap: '0.75rem', marginTop: '1rem' }}>
             {uploadedFiles.map((file) => (
               <div
                 key={file.id}
-                className={`flex items-center justify-between p-3 rounded-lg border ${
+                className={`file-item ${
                   file.status === 'detected' || file.status === 'mapped'
-                    ? 'bg-green-50 border-green-200'
+                    ? 'file-item--success'
                     : file.status === 'needs-mapping'
-                    ? 'bg-amber-50 border-amber-200'
-                    : 'bg-gray-50 border-gray-200'
+                    ? 'file-item--warning'
+                    : 'file-item--processing'
                 }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <span className="text-xl flex-shrink-0">
+                  <span className="file-icon" aria-hidden="true">
                     {file.status === 'detected' || file.status === 'mapped'
                       ? '✅'
                       : file.status === 'needs-mapping'
@@ -392,17 +376,13 @@ export default function UploadClean({ transactions, setTransactions, setCategori
                       : '⏳'}
                   </span>
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>
-                    <p className="text-xs text-gray-500">
+                    <p className="file-name">{file.name}</p>
+                    <p className="file-meta">
                       {file.status === 'detected' && (
-                        <>
-                          Auto-detected: <strong>{file.bank}</strong> — {file.txCount} transactions
-                        </>
+                        <>Auto-detected: <strong>{file.bank}</strong> — {file.txCount} transactions</>
                       )}
                       {file.status === 'mapped' && (
-                        <>
-                          Bank: <strong>{file.bank}</strong> — {file.txCount} transactions
-                        </>
+                        <>Bank: <strong>{file.bank}</strong> — {file.txCount} transactions</>
                       )}
                       {file.status === 'needs-mapping' && 'Manual mapping needed'}
                       {file.status === 'processing' && 'Processing...'}
@@ -411,8 +391,9 @@ export default function UploadClean({ transactions, setTransactions, setCategori
                 </div>
                 <button
                   onClick={() => removeFile(file.id)}
-                  className="text-red-400 hover:text-red-600 text-sm font-medium flex-shrink-0 ml-3"
+                  className="btn-danger-ghost"
                   title="Remove file"
+                  aria-label={`Remove ${file.name}`}
                 >
                   ✕
                 </button>
@@ -420,16 +401,16 @@ export default function UploadClean({ transactions, setTransactions, setCategori
             ))}
           </div>
 
-          {/* Show mapping summaries for detected/mapped files */}
+          {/* Mapping summaries */}
           {uploadedFiles.some((f) => f.mappingSummary && (f.status === 'detected' || f.status === 'mapped')) && (
-            <div className="mt-4 space-y-2">
+            <div className="section-stack mt-4" style={{ gap: '0.5rem' }}>
               {uploadedFiles
                 .filter((f) => f.mappingSummary && (f.status === 'detected' || f.status === 'mapped'))
                 .map((file) => (
-                  <div key={file.id} className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 text-sm">
+                  <div key={file.id} className="mapping-info">
                     <strong>{file.name} — Mapped columns:</strong>{' '}
                     {Object.entries(file.mappingSummary).map(([key, value]) => (
-                      <span key={key} className="inline-block mr-3">
+                      <span key={key} className="mapping-pair">
                         {key} → <strong>{value}</strong>
                       </span>
                     ))}
@@ -440,58 +421,56 @@ export default function UploadClean({ transactions, setTransactions, setCategori
         </div>
       )}
 
-      {/* Manual Column Mapping — one per file that needs it */}
+      {/* Manual Column Mapping */}
       {needsMapping.map((file) => (
-        <div key={file.id} className="bg-white rounded-lg shadow-sm border border-amber-200 p-6">
-          <h3 className="text-lg font-semibold mb-1">
-            Manual Column Mapping — <span className="text-amber-600">{file.name}</span>
+        <div key={file.id} className="glass-panel glass-panel--static glass-panel--accent panel-body">
+          <h3 className="section-title">
+            Manual Column Mapping — <span style={{ color: 'var(--accent-gold)' }}>{file.name}</span>
           </h3>
-          <p className="text-sm text-gray-500 mb-4">
+          <p className="section-subtitle mb-4">
             We couldn&apos;t auto-detect the bank format. Please map the columns below.
           </p>
 
-          {/* Required mappings: Date, Description, Amount, Category */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="mapping-grid">
             {['date', 'description', 'amount', 'category'].map((field) => (
               <div key={field}>
-                <label className="block text-sm font-medium text-gray-700 capitalize mb-1">
+                <label className="glass-label" htmlFor={`mapping-${file.id}-${field}`}>
                   {field} *
                 </label>
                 <select
+                  id={`mapping-${file.id}-${field}`}
                   value={file.columnMapping[field]}
                   onChange={(e) => updateFileMapping(file.id, field, e.target.value)}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                  className="glass-select"
                 >
                   <option value="">Select column...</option>
                   {file.rawHeaders.map((h) => (
-                    <option key={h} value={h}>
-                      {h}
-                    </option>
+                    <option key={h} value={h}>{h}</option>
                   ))}
                 </select>
               </div>
             ))}
           </div>
 
-          {/* Optional: Bank name */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <div className="grid-2-col mt-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Bank Name <span className="text-gray-400 font-normal">(optional)</span>
+              <label className="glass-label" htmlFor={`bank-name-${file.id}`}>
+                Bank Name <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span>
               </label>
               <input
+                id={`bank-name-${file.id}`}
                 type="text"
                 value={file.bankName}
                 onChange={(e) => updateFileBankName(file.id, e.target.value)}
                 placeholder='e.g. "Monzo", "Starling", "My Bank"'
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                className="glass-input"
               />
             </div>
           </div>
 
           <button
             onClick={() => applyManualMapping(file.id)}
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
+            className="btn btn-primary mt-4"
           >
             Apply Mapping
           </button>
@@ -500,20 +479,17 @@ export default function UploadClean({ transactions, setTransactions, setCategori
 
       {/* Stats */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="kpi-grid">
           {[
             { label: 'Total Rows', value: stats.total, icon: '📄' },
             { label: 'Cleaned', value: stats.cleaned, icon: '✨' },
             { label: 'Duplicates Removed', value: stats.duplicatesRemoved, icon: '🔄' },
             { label: 'Issues Flagged', value: stats.withIssues, icon: '⚠️' },
           ].map((stat) => (
-            <div
-              key={stat.label}
-              className="bg-white rounded-lg shadow-sm border border-gray-200 p-4"
-            >
-              <div className="text-2xl">{stat.icon}</div>
-              <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
-              <div className="text-sm text-gray-500">{stat.label}</div>
+            <div key={stat.label} className="glass-panel glass-panel--accent kpi-card">
+              <div className="kpi-icon" aria-hidden="true">{stat.icon}</div>
+              <div className="kpi-value text-mono">{stat.value}</div>
+              <div className="kpi-label">{stat.label}</div>
             </div>
           ))}
         </div>
@@ -521,65 +497,54 @@ export default function UploadClean({ transactions, setTransactions, setCategori
 
       {/* Data Preview Table */}
       {transactions.length > 0 && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          <div className="p-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3">
-            <h3 className="text-lg font-semibold">
-              Cleaned Data Preview ({filteredTransactions.length} of {transactions.length} transactions)
-            </h3>
-            <div className="flex gap-1">
-              {[
-                { key: 'all', label: 'All' },
-                { key: 'issues', label: 'Issues' },
-                { key: 'no-issues', label: 'No Issues' },
-              ].map((f) => (
-                <button
-                  key={f.key}
-                  onClick={() => setIssueFilter(f.key)}
-                  className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                    issueFilter === f.key
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
+        <div className="glass-panel glass-panel--static" style={{ overflow: 'hidden' }}>
+          <div className="panel-body" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <h3 className="section-title">
+                Cleaned Data Preview ({filteredTransactions.length} of {transactions.length} transactions)
+              </h3>
+              <div className="filter-pills">
+                {[
+                  { key: 'all', label: 'All' },
+                  { key: 'issues', label: '⚠️ Issues' },
+                  { key: 'no-issues', label: '✓ No Issues' },
+                ].map((f) => (
+                  <button
+                    key={f.key}
+                    onClick={() => setIssueFilter(f.key)}
+                    className={`filter-pill ${issueFilter === f.key ? 'filter-pill--active' : ''}`}
+                    aria-pressed={issueFilter === f.key}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+          <div className="glass-table-wrap">
+            <table className="glass-table">
+              <thead>
                 <tr>
                   {['Date', 'Description', 'Amount', 'Bank', 'Source File', 'Issues'].map((h) => (
-                    <th
-                      key={h}
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase"
-                    >
-                      {h}
-                    </th>
+                    <th key={h} scope="col">{h}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody>
                 {filteredTransactions.slice(0, 50).map((tx) => (
-                  <tr key={tx.id} className={tx.issues?.length > 0 ? 'bg-yellow-50' : ''}>
-                    <td className="px-4 py-3 text-sm whitespace-nowrap">{tx.date}</td>
-                    <td className="px-4 py-3 text-sm max-w-xs truncate">{tx.description}</td>
-                    <td
-                      className={`px-4 py-3 text-sm font-medium whitespace-nowrap ${
-                        tx.amount >= 0 ? 'text-green-600' : 'text-red-600'
-                      }`}
-                    >
-                      £{tx.amount.toFixed(2)}
+                  <tr key={tx.id} className={tx.issues?.length > 0 ? 'row-issue' : ''}>
+                    <td>{tx.date}</td>
+                    <td className="truncate-cell">{tx.description}</td>
+                    <td style={{ fontWeight: 500 }}>
+                      <span className={tx.amount >= 0 ? 'value-positive' : 'value-negative'}>
+                        £{tx.amount.toFixed(2)}
+                      </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">{tx.bank}</td>
-                    <td className="px-4 py-3 text-sm text-gray-400 max-w-xs truncate">{tx.sourceFile}</td>
-                    <td className="px-4 py-3 text-sm">
+                    <td style={{ color: 'var(--text-secondary)' }}>{tx.bank}</td>
+                    <td className="truncate-cell" style={{ color: 'var(--text-muted)' }}>{tx.sourceFile}</td>
+                    <td>
                       {tx.issues?.map((issue, i) => (
-                        <span
-                          key={i}
-                          className="inline-block bg-yellow-100 text-yellow-800 text-xs px-2 py-0.5 rounded mr-1"
-                        >
+                        <span key={i} className="badge badge-warning" style={{ marginRight: '0.25rem' }}>
                           {issue}
                         </span>
                       ))}
@@ -590,7 +555,7 @@ export default function UploadClean({ transactions, setTransactions, setCategori
             </table>
           </div>
           {filteredTransactions.length > 50 && (
-            <div className="p-3 text-center text-sm text-gray-500 bg-gray-50">
+            <div className="table-footer-info">
               Showing first 50 of {filteredTransactions.length} transactions
             </div>
           )}
