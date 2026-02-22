@@ -17,7 +17,7 @@ export default function UploadClean({ transactions, setTransactions, setCategori
   const [manualMappingSuccess, setManualMappingSuccess] = useState(null)
   const [mappingInfo, setMappingInfo] = useState(null)
 
-  const finishProcessing = (mapped, mappingSummary) => {
+  const finishProcessing = (mapped, mappingSummary, manualSuccessMsg) => {
     const { transactions: cleaned, stats: cleanStats } = cleanTransactions(mapped)
     setStats(cleanStats)
     setTransactions(cleaned)
@@ -27,6 +27,9 @@ export default function UploadClean({ transactions, setTransactions, setCategori
     setError(null)
     if (mappingSummary) {
       setMappingInfo(mappingSummary)
+    }
+    if (manualSuccessMsg) {
+      setManualMappingSuccess(manualSuccessMsg)
     }
   }
 
@@ -84,8 +87,8 @@ export default function UploadClean({ transactions, setTransactions, setCategori
       Category: '—',
     }
 
-    finishProcessing(mapped, mappingSummary)
-    setManualMappingSuccess(`✅ Manual mapping applied successfully — ${mapped.length} transactions loaded`)
+    const successMsg = `✅ Manual mapping applied successfully — ${mapped.length} transactions loaded`
+    finishProcessing(mapped, mappingSummary, successMsg)
     setDetectedBank(null)
   }
 

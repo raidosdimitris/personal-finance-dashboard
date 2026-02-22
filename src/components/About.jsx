@@ -46,6 +46,9 @@ export default function About() {
           <li>• <strong>Card numbers</strong> are stripped from descriptions</li>
           <li>• Original files are never modified — only the in-memory copy is cleaned</li>
         </ul>
+        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+          💡 If you&apos;re uncomfortable uploading your raw bank statement, you can create a simple spreadsheet with just four columns: <strong>Date</strong>, <strong>Amount</strong>, <strong>Merchant</strong>, and <strong>Category</strong>. The dashboard only needs these columns to generate all charts and insights — no account numbers, balances, or other sensitive fields required.
+        </div>
       </div>
 
       {/* Required Columns */}

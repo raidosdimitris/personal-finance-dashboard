@@ -97,7 +97,7 @@ export default function Export({ transactions }) {
   }
 
   /**
-   * Fix #7: Render chart to an offscreen canvas using Chart.js directly,
+   * Render chart to an offscreen canvas using Chart.js directly,
    * so export works even when Dashboard tab is not mounted.
    */
   const downloadChartPNG = (chartType, filename) => {
@@ -135,6 +135,42 @@ export default function Export({ transactions }) {
     chart.destroy()
   }
 
+  /**
+   * Render a chart to an offscreen canvas and return its data URL.
+   */
+  const renderChartToDataURL = (chartType, width, height) => {
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+
+    const data = chartType === 'bar' ? barChartData : donutChartData
+    const options = chartType === 'bar'
+      ? {
+          responsive: false,
+          animation: false,
+          plugins: { legend: { display: false }, title: { display: true, text: 'Spending Over Time' } },
+          scales: { y: { beginAtZero: true, ticks: { callback: (v) => `£${v}` } } },
+        }
+      : {
+          responsive: false,
+          animation: false,
+          plugins: {
+            legend: { position: 'bottom', labels: { boxWidth: 12 } },
+            title: { display: true, text: 'Category Breakdown' },
+          },
+        }
+
+    const chart = new ChartJS(canvas, {
+      type: chartType === 'bar' ? 'bar' : 'doughnut',
+      data,
+      options,
+    })
+
+    const dataURL = canvas.toDataURL('image/png')
+    chart.destroy()
+    return dataURL
+  }
+
   const downloadPDF = () => {
     const doc = new jsPDF()
 
@@ -157,32 +193,53 @@ export default function Export({ transactions }) {
     doc.setFontSize(10)
     doc.text(`Total Transactions: ${transactions.length}`, 14, 54)
 
-    // Income in green
+    // Income — label in black, value in green
+    const incomeLabel = 'Total Income: '
+    doc.setTextColor(0, 0, 0)
+    doc.text(incomeLabel, 14, 60)
+    const incomeLabelWidth = doc.getTextWidth(incomeLabel)
     doc.setTextColor(34, 197, 94)
-    doc.text(`Total Income: £${totalIncome.toFixed(2)}`, 14, 60)
+    doc.text(`£${totalIncome.toFixed(2)}`, 14 + incomeLabelWidth, 60)
 
-    // Spending in red
+    // Spending — label in black, value in red
+    const spendingLabel = 'Total Spending: '
+    doc.setTextColor(0, 0, 0)
+    doc.text(spendingLabel, 14, 66)
+    const spendingLabelWidth = doc.getTextWidth(spendingLabel)
     doc.setTextColor(239, 68, 68)
-    doc.text(`Total Spending: £${totalSpending.toFixed(2)}`, 14, 66)
+    doc.text(`£${totalSpending.toFixed(2)}`, 14 + spendingLabelWidth, 66)
 
-    // Net with explanation
+    // Net — label in black, value in green/red
+    const netLabel = 'Net (Income - Spending): '
     const netColor = net >= 0 ? [34, 197, 94] : [239, 68, 68]
+    doc.setTextColor(0, 0, 0)
+    doc.text(netLabel, 14, 72)
+    const netLabelWidth = doc.getTextWidth(netLabel)
     doc.setTextColor(...netColor)
-    doc.text(`Net (Income - Spending): £${net.toFixed(2)}`, 14, 72)
+    doc.text(`£${net.toFixed(2)}`, 14 + netLabelWidth, 72)
 
-    doc.setFontSize(9)
+    // "You saved" / "You overspent" line — font size 10 to match
+    doc.setFontSize(10)
     if (net >= 0) {
+      const savedLabel = 'You saved '
+      doc.setTextColor(0, 0, 0)
+      doc.text(savedLabel, 14, 78)
+      const savedLabelWidth = doc.getTextWidth(savedLabel)
       doc.setTextColor(34, 197, 94)
-      doc.text(`You saved £${net.toFixed(2)}`, 14, 77)
+      doc.text(`£${net.toFixed(2)}`, 14 + savedLabelWidth, 78)
     } else {
+      const overspentLabel = 'You overspent by '
+      doc.setTextColor(0, 0, 0)
+      doc.text(overspentLabel, 14, 78)
+      const overspentLabelWidth = doc.getTextWidth(overspentLabel)
       doc.setTextColor(239, 68, 68)
-      doc.text(`You overspent by £${Math.abs(net).toFixed(2)}`, 14, 77)
+      doc.text(`£${Math.abs(net).toFixed(2)}`, 14 + overspentLabelWidth, 78)
     }
 
     // Category breakdown
     doc.setTextColor(0, 0, 0)
     doc.setFontSize(14)
-    doc.text('Spending by Category', 14, 90)
+    doc.text('Spending by Category', 14, 92)
 
     const catBreakdown = {}
     spending.forEach((tx) => {
@@ -194,7 +251,7 @@ export default function Export({ transactions }) {
       .map(([cat, amount]) => [cat, `£${amount.toFixed(2)}`])
 
     doc.autoTable({
-      startY: 95,
+      startY: 97,
       head: [['Category', 'Amount']],
       body: catRows,
       theme: 'striped',
@@ -225,39 +282,22 @@ export default function Export({ transactions }) {
       headStyles: { fillColor: [59, 130, 246] },
     })
 
-    // Transaction table
-    const txRows = transactions.slice(0, 50).map((tx) => [
-      tx.date,
-      tx.description.substring(0, 40),
-      `£${tx.amount.toFixed(2)}`,
-      tx.category,
-    ])
-
+    // Charts page
     doc.addPage()
     doc.setFontSize(14)
     doc.setTextColor(0, 0, 0)
-    doc.text('Transactions (first 50)', 14, 20)
+    doc.text('Charts', 14, 20)
 
-    doc.autoTable({
-      startY: 25,
-      head: [['Date', 'Description', 'Amount', 'Category']],
-      body: txRows,
-      theme: 'striped',
-      headStyles: { fillColor: [59, 130, 246] },
-      styles: { fontSize: 8 },
-      didParseCell: (data) => {
-        // Color amount cells: green for income, red for spending
-        if (data.section === 'body' && data.column.index === 2) {
-          const amountStr = data.cell.raw
-          const amount = parseFloat(amountStr.replace('£', ''))
-          if (amount >= 0) {
-            data.cell.styles.textColor = [34, 197, 94]
-          } else {
-            data.cell.styles.textColor = [239, 68, 68]
-          }
-        }
-      },
-    })
+    try {
+      const barDataURL = renderChartToDataURL('bar', 600, 300)
+      doc.addImage(barDataURL, 'PNG', 14, 28, 180, 90)
+
+      const donutDataURL = renderChartToDataURL('doughnut', 600, 300)
+      doc.addImage(donutDataURL, 'PNG', 14, 128, 180, 90)
+    } catch (e) {
+      doc.setFontSize(10)
+      doc.text('Charts could not be rendered.', 14, 30)
+    }
 
     doc.save(`finance-report-${new Date().toISOString().split('T')[0]}.pdf`)
   }
