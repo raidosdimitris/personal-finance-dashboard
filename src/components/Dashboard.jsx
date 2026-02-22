@@ -38,6 +38,7 @@ export default function Dashboard({ transactions }) {
 
   const totalSpending = spending.reduce((sum, tx) => sum + Math.abs(tx.amount), 0)
   const totalIncome = income.reduce((sum, tx) => sum + tx.amount, 0)
+  const net = totalIncome - totalSpending
 
   // Monthly data
   const monthlyData = useMemo(() => {
@@ -71,11 +72,13 @@ export default function Dashboard({ transactions }) {
   }, [spending])
 
   // Recurring payments (same description appearing 2+ times)
+  // Fix #6: Sum all matching transactions for accurate total and average
   const recurring = useMemo(() => {
     const counts = {}
     spending.forEach((tx) => {
       const key = tx.description?.toLowerCase() || ''
-      if (!counts[key]) counts[key] = { description: tx.description, amount: Math.abs(tx.amount), count: 0 }
+      if (!counts[key]) counts[key] = { description: tx.description, total: 0, count: 0 }
+      counts[key].total += Math.abs(tx.amount)
       counts[key].count++
     })
     return Object.values(counts)
@@ -180,15 +183,27 @@ export default function Dashboard({ transactions }) {
           <div className="text-sm text-gray-500">Total Income</div>
           <div className="text-2xl font-bold text-green-600">£{totalIncome.toFixed(2)}</div>
         </div>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div className="text-sm text-gray-500">Net</div>
-          <div className={`text-2xl font-bold ${totalIncome - totalSpending >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            £{(totalIncome - totalSpending).toFixed(2)}
+        <div
+          className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 cursor-help"
+          title="Net = Total Income minus Total Spending. Positive (green) means you saved money. Negative (red) means you spent more than you earned."
+        >
+          <div className="text-sm text-gray-500">
+            Net
+            <span className="ml-1 inline-block w-4 h-4 text-center text-xs rounded-full bg-gray-200 text-gray-600 leading-4">?</span>
+          </div>
+          <div className={`text-2xl font-bold ${net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            £{net.toFixed(2)}
           </div>
         </div>
         {monthComparison && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <div className="text-sm text-gray-500">vs Previous Month</div>
+          <div
+            className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 cursor-help"
+            title={`Compares spending between ${monthComparison.currentMonth} and ${monthComparison.previousMonth}. Green = you spent less than last month. Red = you spent more.`}
+          >
+            <div className="text-sm text-gray-500">
+              vs Previous Month
+              <span className="ml-1 inline-block w-4 h-4 text-center text-xs rounded-full bg-gray-200 text-gray-600 leading-4">?</span>
+            </div>
             <div className={`text-2xl font-bold ${monthComparison.diff <= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {monthComparison.diff > 0 ? '+' : ''}{monthComparison.pct}%
             </div>
@@ -260,7 +275,9 @@ export default function Dashboard({ transactions }) {
                   <span className="text-sm font-medium">{r.description}</span>
                   <span className="text-xs text-gray-400 ml-2">({r.count} times)</span>
                 </div>
-                <span className="text-sm font-medium text-red-600">£{r.amount.toFixed(2)} each</span>
+                <span className="text-sm font-medium text-red-600">
+                  Total: £{r.total.toFixed(2)} • Avg: £{(r.total / r.count).toFixed(2)}/each
+                </span>
               </div>
             ))}
           </div>

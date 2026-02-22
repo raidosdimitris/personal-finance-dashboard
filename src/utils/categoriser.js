@@ -9,6 +9,38 @@ const STORAGE_KEY = 'finance-dashboard-category-rules'
 const CUSTOM_CATEGORIES_KEY = 'finance-dashboard-custom-categories'
 
 /**
+ * Mapping of common bank-provided categories to internal categories
+ */
+const BANK_CATEGORY_MAP = {
+  // Monzo categories
+  'eating out': 'dining',
+  'groceries': 'groceries',
+  'transport': 'transport',
+  'shopping': 'shopping',
+  'entertainment': 'entertainment',
+  'bills': 'utilities',
+  'personal care': 'health',
+  'general': 'other',
+  'finances': 'transfers',
+  'charity': 'other',
+  'family': 'other',
+  'holidays': 'entertainment',
+  'expenses': 'other',
+  // Starling categories
+  'food & drink': 'dining',
+  'home': 'utilities',
+  'lifestyle': 'entertainment',
+  'payments': 'transfers',
+  'saving': 'transfers',
+  'income': 'income',
+  // Barclays subcategories
+  'food and drink': 'dining',
+  'transportation': 'transport',
+  'health and beauty': 'health',
+  'utilities and bills': 'utilities',
+}
+
+/**
  * Load category rules from localStorage or use defaults
  */
 export function loadRules() {
@@ -57,6 +89,18 @@ export function getAllCategories() {
 }
 
 /**
+ * Map a bank-provided category to an internal category.
+ * Returns mapped category or the original (lowercased) if no mapping exists.
+ * Returns null if the input is empty.
+ */
+function mapBankCategory(bankCategory) {
+  if (!bankCategory) return null
+  const normalised = bankCategory.trim().toLowerCase()
+  if (!normalised) return null
+  return BANK_CATEGORY_MAP[normalised] || normalised
+}
+
+/**
  * Categorise a single transaction based on description keywords
  */
 export function categoriseTransaction(description, rules) {
@@ -73,14 +117,22 @@ export function categoriseTransaction(description, rules) {
 }
 
 /**
- * Categorise all transactions
+ * Categorise all transactions.
+ * Priority: existing category > bank's original category > keyword-based
  */
 export function categoriseAll(transactions) {
   const rules = loadRules()
-  return transactions.map((tx) => ({
-    ...tx,
-    category: tx.category || categoriseTransaction(tx.description, rules),
-  }))
+  return transactions.map((tx) => {
+    // If already categorised, keep it
+    if (tx.category) return tx
+    // Try bank's original category first
+    const bankCat = mapBankCategory(tx.originalCategory)
+    if (bankCat) {
+      return { ...tx, category: bankCat }
+    }
+    // Fall back to keyword-based categorisation
+    return { ...tx, category: categoriseTransaction(tx.description, rules) }
+  })
 }
 
 /** Category colours for charts */

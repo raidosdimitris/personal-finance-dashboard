@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState } from 'react'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import { detectBank, mapTransaction } from '../utils/bankDetector'
@@ -14,13 +14,29 @@ export default function UploadClean({ transactions, setTransactions, setCategori
   const [rawHeaders, setRawHeaders] = useState([])
   const [rawData, setRawData] = useState([])
   const [columnMapping, setColumnMapping] = useState({ date: '', description: '', amount: '' })
+  const [manualMappingSuccess, setManualMappingSuccess] = useState(null)
+  const [mappingInfo, setMappingInfo] = useState(null)
 
-  const processData = useCallback((headers, rows) => {
+  const finishProcessing = (mapped, mappingSummary) => {
+    const { transactions: cleaned, stats: cleanStats } = cleanTransactions(mapped)
+    setStats(cleanStats)
+    setTransactions(cleaned)
+    const categorised = categoriseAll(cleaned)
+    setCategorisedTransactions(categorised)
+    setShowMapping(false)
+    setError(null)
+    if (mappingSummary) {
+      setMappingInfo(mappingSummary)
+    }
+  }
+
+  const processData = (headers, rows) => {
     const bank = detectBank(headers)
     setDetectedBank(bank)
+    setManualMappingSuccess(null)
+    setMappingInfo(null)
 
     if (!bank) {
-      // Show manual mapping UI
       setRawHeaders(headers)
       setRawData(rows)
       setShowMapping(true)
@@ -31,18 +47,14 @@ export default function UploadClean({ transactions, setTransactions, setCategori
       .filter((row) => Object.values(row).some((v) => v && v.toString().trim()))
       .map((row) => mapTransaction(row, bank))
 
-    finishProcessing(mapped)
-  }, [])
+    const mappingSummary = {
+      Date: bank.mapping.date,
+      'Merchant/Description': bank.mapping.description,
+      Amount: bank.mapping.amount || (bank.id === 'nationwide' ? `${bank.mapping.paidIn} / ${bank.mapping.paidOut}` : '—'),
+      Category: bank.mapping.category || bank.mapping.subcategory || '—',
+    }
 
-  const finishProcessing = (mapped) => {
-    const { transactions: cleaned, stats: cleanStats } = cleanTransactions(mapped)
-    setStats(cleanStats)
-    setTransactions(cleaned)
-    // Auto-categorise
-    const categorised = categoriseAll(cleaned)
-    setCategorisedTransactions(categorised)
-    setShowMapping(false)
-    setError(null)
+    finishProcessing(mapped, mappingSummary)
   }
 
   const applyManualMapping = () => {
@@ -50,6 +62,12 @@ export default function UploadClean({ transactions, setTransactions, setCategori
       setError('Please map all required columns (Date, Description, Amount)')
       return
     }
+
+    if (rawData.length === 0) {
+      setError('No data available. Please re-upload your file.')
+      return
+    }
+
     const mapped = rawData.map((row) => ({
       date: row[columnMapping.date] || '',
       description: row[columnMapping.description] || '',
@@ -58,11 +76,23 @@ export default function UploadClean({ transactions, setTransactions, setCategori
       reference: '',
       bank: 'Manual',
     }))
-    finishProcessing(mapped)
+
+    const mappingSummary = {
+      Date: columnMapping.date,
+      'Merchant/Description': columnMapping.description,
+      Amount: columnMapping.amount,
+      Category: '—',
+    }
+
+    finishProcessing(mapped, mappingSummary)
+    setManualMappingSuccess(`✅ Manual mapping applied successfully — ${mapped.length} transactions loaded`)
+    setDetectedBank(null)
   }
 
-  const handleFile = useCallback((file) => {
+  const handleFile = (file) => {
     setError(null)
+    setManualMappingSuccess(null)
+    setMappingInfo(null)
     const ext = file.name.split('.').pop().toLowerCase()
 
     if (ext === 'csv') {
@@ -94,14 +124,14 @@ export default function UploadClean({ transactions, setTransactions, setCategori
     } else {
       setError('Unsupported file format. Please upload a CSV or Excel file.')
     }
-  }, [processData])
+  }
 
-  const onDrop = useCallback((e) => {
+  const onDrop = (e) => {
     e.preventDefault()
     setDragOver(false)
     const file = e.dataTransfer.files[0]
     if (file) handleFile(file)
-  }, [handleFile])
+  }
 
   const onFileInput = (e) => {
     const file = e.target.files[0]
@@ -151,6 +181,23 @@ export default function UploadClean({ transactions, setTransactions, setCategori
             ✅ Detected format: <strong>{detectedBank.name}</strong>
           </div>
         )}
+
+        {manualMappingSuccess && (
+          <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
+            {manualMappingSuccess}
+          </div>
+        )}
+
+        {mappingInfo && (
+          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 text-sm">
+            <strong>Mapped columns:</strong>{' '}
+            {Object.entries(mappingInfo).map(([key, value]) => (
+              <span key={key} className="inline-block mr-3">
+                {key} → <strong>{value}</strong>
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Manual Column Mapping */}
@@ -158,7 +205,7 @@ export default function UploadClean({ transactions, setTransactions, setCategori
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h3 className="text-lg font-semibold mb-3">Manual Column Mapping</h3>
           <p className="text-sm text-gray-500 mb-4">
-            We couldn't auto-detect your bank format. Please map the columns below.
+            We couldn&apos;t auto-detect your bank format. Please map the columns below.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {['date', 'description', 'amount'].map((field) => (
