@@ -260,6 +260,33 @@ export default function Dashboard({ transactions }) {
         </div>
       </div>
 
+      {/* Top Categories */}
+      {categoryData.length > 0 && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold mb-4">Top Categories</h3>
+          <div className="space-y-2">
+            {categoryData.map(([name, amount], i) => {
+              const pct = totalSpending > 0 ? ((amount / totalSpending) * 100).toFixed(1) : 0
+              return (
+                <div key={name} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="w-3 h-3 rounded-full inline-block flex-shrink-0"
+                      style={{ backgroundColor: getCategoryColour(name) }}
+                    />
+                    <span className="text-sm font-medium capitalize">{name}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-gray-400">{pct}%</span>
+                    <span className="text-sm text-gray-900 font-semibold w-24 text-right">£{amount.toFixed(2)}</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Top Merchants */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <h3 className="text-lg font-semibold mb-4">Top Merchants</h3>
@@ -279,7 +306,10 @@ export default function Dashboard({ transactions }) {
       {/* Recurring Payments */}
       {recurring.length > 0 && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold mb-4">🔄 Recurring Payments</h3>
+          <h3 className="text-lg font-semibold mb-4">
+            🔄 Recurring Payments
+            <InfoTooltip text="Payments are classified as recurring when the same merchant appears 2 or more times in your transaction history." />
+          </h3>
           <div className="space-y-2">
             {recurring.map((r) => (
               <div key={r.description} className="flex items-center justify-between">

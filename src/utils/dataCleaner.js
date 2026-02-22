@@ -8,27 +8,37 @@
 
 /**
  * Normalise a date string to YYYY-MM-DD format
+ * Handles: Excel serial dates, DD/MM/YYYY, M/D/YY, YYYY-MM-DD, native Date parsing
  */
 export function normaliseDate(dateStr) {
-  if (!dateStr) return ''
-  const str = dateStr.trim()
+  if (!dateStr && dateStr !== 0) return ''
 
-  // Try common formats
-  const formats = [
-    // DD/MM/YYYY
-    /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/,
-    // DD-MM-YYYY
-    /^(\d{1,2})-(\d{1,2})-(\d{4})$/,
-    // YYYY-MM-DD (already normalised)
-    /^(\d{4})-(\d{2})-(\d{2})$/,
-    // DD Mon YYYY
-    /^(\d{1,2})\s+(\w{3})\s+(\d{4})$/,
-  ]
+  // Excel serial date: days since 1900-01-01 (with the 1900 leap year bug)
+  if (typeof dateStr === 'number' || (typeof dateStr === 'string' && /^\d{4,5}(\.\d+)?$/.test(dateStr.trim()))) {
+    const serial = typeof dateStr === 'number' ? dateStr : parseFloat(dateStr.trim())
+    if (serial > 1 && serial < 200000) {
+      const utcDays = serial - 25569 // Excel epoch offset to Unix epoch
+      const date = new Date(utcDays * 86400 * 1000)
+      return date.toISOString().split('T')[0]
+    }
+  }
 
-  // DD/MM/YYYY or DD-MM-YYYY
-  const slashMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/)
-  if (slashMatch) {
-    const [, day, month, year] = slashMatch
+  const str = String(dateStr).trim()
+
+  // M/D/YY or M/D/YYYY (US format from xlsx raw:false)
+  const usMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/)
+  if (usMatch) {
+    let [, month, day, year] = usMatch
+    if (year.length === 2) {
+      year = parseInt(year) > 50 ? '19' + year : '20' + year
+    }
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+  }
+
+  // DD-MM-YYYY
+  const dashMatch = str.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/)
+  if (dashMatch) {
+    const [, day, month, year] = dashMatch
     return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
   }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   loadRules,
   saveRules,
@@ -9,12 +9,24 @@ import {
   getCategoryColour,
 } from '../utils/categoriser'
 
+function InfoTooltip({ text }) {
+  return (
+    <div className="relative group inline-block">
+      <span className="ml-1 inline-block w-4 h-4 text-center text-xs rounded-full bg-gray-200 text-gray-600 leading-4 cursor-help">?</span>
+      <div className="hidden group-hover:block absolute z-10 bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2 bg-gray-800 text-white text-xs rounded-lg shadow-lg">
+        {text}
+      </div>
+    </div>
+  )
+}
+
 export default function Categorise({ transactions, categorisedTransactions, setCategorisedTransactions }) {
   const [rules, setRules] = useState(loadRules())
   const [categories, setCategories] = useState(getAllCategories())
   const [newCategory, setNewCategory] = useState('')
   const [editingRule, setEditingRule] = useState(null)
   const [newKeyword, setNewKeyword] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
 
   // Re-categorise when transactions change
   useEffect(() => {
@@ -71,6 +83,16 @@ export default function Categorise({ transactions, categorisedTransactions, setC
     setCategorisedTransactions(categoriseAll(reset))
   }
 
+  // Filtered transactions based on search query
+  const filteredTransactions = useMemo(() => {
+    if (!searchQuery.trim()) return categorisedTransactions
+    const q = searchQuery.toLowerCase()
+    return categorisedTransactions.filter((tx) =>
+      (tx.description || '').toLowerCase().includes(q) ||
+      (tx.category || '').toLowerCase().includes(q)
+    )
+  }, [categorisedTransactions, searchQuery])
+
   if (transactions.length === 0) {
     return (
       <div className="text-center py-12">
@@ -91,7 +113,10 @@ export default function Categorise({ transactions, categorisedTransactions, setC
       {/* Category Summary */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold">Category Summary</h2>
+          <h2 className="text-xl font-semibold">
+            Category Summary
+            <InfoTooltip text="Categories are automatically assigned based on keyword rules. You can add custom categories and then change individual transactions to use them." />
+          </h2>
           <button
             onClick={recategoriseAll}
             className="px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
@@ -135,7 +160,10 @@ export default function Categorise({ transactions, categorisedTransactions, setC
 
       {/* Category Rules Editor */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold mb-3">Category Rules (Keywords)</h3>
+        <h3 className="text-lg font-semibold mb-3">
+          Category Rules (Keywords)
+          <InfoTooltip text="Keywords are used to automatically categorise transactions. Default keywords match common merchant names. Click a category to see its keywords, and add your own to improve categorisation accuracy." />
+        </h3>
         <div className="space-y-3">
           {categories.filter((c) => c !== 'other').map((cat) => (
             <div key={cat} className="border border-gray-100 rounded-lg p-3">
@@ -198,8 +226,22 @@ export default function Categorise({ transactions, categorisedTransactions, setC
       {/* Transaction List with Category Override */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         <div className="p-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold">Transactions ({categorisedTransactions.length})</h3>
-          <p className="text-sm text-gray-500">Click a category to change it</p>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-lg font-semibold">Transactions ({categorisedTransactions.length})</h3>
+            {searchQuery && (
+              <span className="text-sm text-gray-500">
+                Showing {filteredTransactions.length} of {categorisedTransactions.length} transactions
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-gray-500 mb-3">Click a category to change it</p>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by description or category..."
+            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+          />
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
@@ -213,7 +255,7 @@ export default function Categorise({ transactions, categorisedTransactions, setC
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {categorisedTransactions.slice(0, 100).map((tx) => (
+              {filteredTransactions.slice(0, 100).map((tx) => (
                 <tr key={tx.id}>
                   <td className="px-4 py-3 text-sm whitespace-nowrap">{tx.date}</td>
                   <td className="px-4 py-3 text-sm max-w-xs truncate">{tx.description}</td>
@@ -239,9 +281,9 @@ export default function Categorise({ transactions, categorisedTransactions, setC
             </tbody>
           </table>
         </div>
-        {categorisedTransactions.length > 100 && (
+        {filteredTransactions.length > 100 && (
           <div className="p-3 text-center text-sm text-gray-500 bg-gray-50">
-            Showing first 100 of {categorisedTransactions.length} transactions
+            Showing first 100 of {filteredTransactions.length} transactions
           </div>
         )}
       </div>

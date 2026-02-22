@@ -2,7 +2,7 @@ import { useState } from 'react'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import { detectBank, mapTransaction } from '../utils/bankDetector'
-import { cleanTransactions } from '../utils/dataCleaner'
+import { cleanTransactions, normaliseDate, normaliseAmount } from '../utils/dataCleaner'
 import { categoriseAll } from '../utils/categoriser'
 
 export default function UploadClean({ transactions, setTransactions, setCategorisedTransactions }) {
@@ -16,8 +16,9 @@ export default function UploadClean({ transactions, setTransactions, setCategori
   const [columnMapping, setColumnMapping] = useState({ date: '', description: '', amount: '' })
   const [manualMappingSuccess, setManualMappingSuccess] = useState(null)
   const [mappingInfo, setMappingInfo] = useState(null)
+  const [validationInfo, setValidationInfo] = useState(null)
 
-  const finishProcessing = (mapped, mappingSummary, manualSuccessMsg) => {
+  const finishProcessing = (mapped, mappingSummary, manualSuccessMsg, validationMsg) => {
     const { transactions: cleaned, stats: cleanStats } = cleanTransactions(mapped)
     setStats(cleanStats)
     setTransactions(cleaned)
@@ -31,6 +32,9 @@ export default function UploadClean({ transactions, setTransactions, setCategori
     if (manualSuccessMsg) {
       setManualMappingSuccess(manualSuccessMsg)
     }
+    if (validationMsg) {
+      setValidationInfo(validationMsg)
+    }
   }
 
   const processData = (headers, rows) => {
@@ -38,6 +42,7 @@ export default function UploadClean({ transactions, setTransactions, setCategori
     setDetectedBank(bank)
     setManualMappingSuccess(null)
     setMappingInfo(null)
+    setValidationInfo(null)
 
     if (!bank) {
       setRawHeaders(headers)
@@ -71,14 +76,39 @@ export default function UploadClean({ transactions, setTransactions, setCategori
       return
     }
 
-    const mapped = rawData.map((row) => ({
-      date: row[columnMapping.date] || '',
-      description: row[columnMapping.description] || '',
-      amount: row[columnMapping.amount] || '0',
-      originalCategory: '',
-      reference: '',
-      bank: 'Manual',
-    }))
+    // Validate and convert mapped data
+    let dateConversions = 0
+    let amountConversions = 0
+    let dateErrors = 0
+
+    const mapped = rawData.map((row) => {
+      let dateVal = row[columnMapping.date] || ''
+      let amountVal = row[columnMapping.amount] || '0'
+
+      // Check if date is an Excel serial number and convert
+      const normDate = normaliseDate(dateVal)
+      if (normDate !== String(dateVal).trim() && normDate !== '') {
+        dateConversions++
+      }
+      if (normDate === String(dateVal).trim() && dateVal && isNaN(new Date(dateVal).getTime())) {
+        dateErrors++
+      }
+
+      // Check if amount needs cleaning (currency symbols, etc.)
+      const normAmount = normaliseAmount(amountVal)
+      if (typeof amountVal === 'string' && amountVal.replace(/[£$€,\s]/g, '') !== amountVal) {
+        amountConversions++
+      }
+
+      return {
+        date: dateVal,
+        description: row[columnMapping.description] || '',
+        amount: amountVal,
+        originalCategory: '',
+        reference: '',
+        bank: 'Manual',
+      }
+    })
 
     const mappingSummary = {
       Date: columnMapping.date,
@@ -87,8 +117,21 @@ export default function UploadClean({ transactions, setTransactions, setCategori
       Category: '—',
     }
 
+    // Build validation feedback
+    const validationParts = []
+    if (dateConversions > 0) {
+      validationParts.push(`${dateConversions} date(s) converted from serial/alternate format`)
+    }
+    if (amountConversions > 0) {
+      validationParts.push(`${amountConversions} amount(s) had currency symbols stripped`)
+    }
+    if (dateErrors > 0) {
+      validationParts.push(`⚠️ ${dateErrors} date(s) could not be parsed`)
+    }
+    const validationMsg = validationParts.length > 0 ? validationParts.join(' • ') : null
+
     const successMsg = `✅ Manual mapping applied successfully — ${mapped.length} transactions loaded`
-    finishProcessing(mapped, mappingSummary, successMsg)
+    finishProcessing(mapped, mappingSummary, successMsg, validationMsg)
     setDetectedBank(null)
   }
 
@@ -96,6 +139,7 @@ export default function UploadClean({ transactions, setTransactions, setCategori
     setError(null)
     setManualMappingSuccess(null)
     setMappingInfo(null)
+    setValidationInfo(null)
     const ext = file.name.split('.').pop().toLowerCase()
 
     if (ext === 'csv') {
@@ -116,7 +160,8 @@ export default function UploadClean({ transactions, setTransactions, setCategori
         try {
           const wb = XLSX.read(e.target.result, { type: 'array' })
           const sheet = wb.Sheets[wb.SheetNames[0]]
-          const data = XLSX.utils.sheet_to_json(sheet, { defval: '' })
+          // Use raw: false to get formatted values (dates as strings, not serial numbers)
+          const data = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false })
           const headers = data.length > 0 ? Object.keys(data[0]) : []
           processData(headers, data)
         } catch (err) {
@@ -188,6 +233,12 @@ export default function UploadClean({ transactions, setTransactions, setCategori
         {manualMappingSuccess && (
           <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
             {manualMappingSuccess}
+          </div>
+        )}
+
+        {validationInfo && (
+          <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-700 text-sm">
+            🔧 {validationInfo}
           </div>
         )}
 
