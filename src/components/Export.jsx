@@ -144,6 +144,35 @@ export default function Export({ transactions }) {
     canvas.height = height
 
     const data = chartType === 'bar' ? barChartData : donutChartData
+
+    // Custom plugin to draw percentage labels on donut slices
+    const percentageLabelPlugin = {
+      id: 'percentageLabels',
+      afterDraw(chart) {
+        if (chart.config.type !== 'doughnut') return
+        const { ctx } = chart
+        const meta = chart.getDatasetMeta(0)
+        const total = meta.total || chart.data.datasets[0].data.reduce((a, b) => a + b, 0)
+
+        meta.data.forEach((arc, i) => {
+          const value = chart.data.datasets[0].data[i]
+          const pct = total > 0 ? ((value / total) * 100).toFixed(1) : 0
+          if (pct < 3) return // Skip tiny slices
+
+          const { x, y } = arc.tooltipPosition()
+          ctx.save()
+          ctx.fillStyle = '#fff'
+          ctx.font = 'bold 11px sans-serif'
+          ctx.textAlign = 'center'
+          ctx.textBaseline = 'middle'
+          ctx.fillText(`${pct}%`, x, y)
+          ctx.restore()
+        })
+      },
+    }
+
+    const plugins = chartType === 'bar' ? [] : [percentageLabelPlugin]
+
     const options = chartType === 'bar'
       ? {
           responsive: false,
@@ -164,6 +193,7 @@ export default function Export({ transactions }) {
       type: chartType === 'bar' ? 'bar' : 'doughnut',
       data,
       options,
+      plugins,
     })
 
     const dataURL = canvas.toDataURL('image/png')
@@ -248,11 +278,14 @@ export default function Export({ transactions }) {
 
     const catRows = Object.entries(catBreakdown)
       .sort(([, a], [, b]) => b - a)
-      .map(([cat, amount]) => [cat, `£${amount.toFixed(2)}`])
+      .map(([cat, amount]) => {
+        const pct = totalSpending > 0 ? ((amount / totalSpending) * 100).toFixed(1) : '0.0'
+        return [cat, `£${amount.toFixed(2)}`, `${pct}%`]
+      })
 
     doc.autoTable({
       startY: 97,
-      head: [['Category', 'Amount']],
+      head: [['Category', 'Amount', '%']],
       body: catRows,
       theme: 'striped',
       headStyles: { fillColor: [59, 130, 246] },
@@ -268,15 +301,14 @@ export default function Export({ transactions }) {
     doc.setTextColor(0, 0, 0)
     doc.text('Top 10 Merchants', 14, currentY)
 
-    const merchantRows = topMerchants.map(([name, amount], i) => [
-      `${i + 1}.`,
-      name.substring(0, 40),
-      `£${amount.toFixed(2)}`,
-    ])
+    const merchantRows = topMerchants.map(([name, amount], i) => {
+      const pct = totalSpending > 0 ? ((amount / totalSpending) * 100).toFixed(1) : '0.0'
+      return [`${i + 1}.`, name.substring(0, 40), `£${amount.toFixed(2)}`, `${pct}%`]
+    })
 
     doc.autoTable({
       startY: currentY + 5,
-      head: [['#', 'Merchant', 'Amount']],
+      head: [['#', 'Merchant', 'Amount', '%']],
       body: merchantRows,
       theme: 'striped',
       headStyles: { fillColor: [59, 130, 246] },

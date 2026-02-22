@@ -12,6 +12,7 @@ export default function UploadClean({ transactions, setTransactions, setCategori
   const [stats, setStats] = useState(null)
   const [error, setError] = useState(null)
   const [validationInfo, setValidationInfo] = useState(null)
+  const [issueFilter, setIssueFilter] = useState('all') // 'all' | 'issues' | 'no-issues'
 
   // Multi-file state: each entry tracks one uploaded file
   // { id, name, status: 'detected'|'needs-mapping'|'mapped', bank, rawHeaders, rawData,
@@ -66,7 +67,7 @@ export default function UploadClean({ transactions, setTransactions, setCategori
     // Auto-detected
     const mapped = rows
       .filter((row) => Object.values(row).some((v) => v && v.toString().trim()))
-      .map((row) => mapTransaction(row, bank))
+      .map((row) => ({ ...mapTransaction(row, bank), sourceFile: fileEntry.name }))
 
     setUploadedFiles((prev) => {
       const updated = prev.map((f) =>
@@ -104,8 +105,8 @@ export default function UploadClean({ transactions, setTransactions, setCategori
 
       const { columnMapping, rawData, bankName } = file
 
-      if (!columnMapping.date || !columnMapping.description || !columnMapping.amount) {
-        setError(`Please map all required columns (Date, Description, Amount) for "${file.name}"`)
+      if (!columnMapping.date || !columnMapping.description || !columnMapping.amount || !columnMapping.category) {
+        setError(`Please map all required columns (Date, Description, Amount, Category) for "${file.name}"`)
         return prev
       }
 
@@ -136,7 +137,7 @@ export default function UploadClean({ transactions, setTransactions, setCategori
           amountConversions++
         }
 
-        const resolvedCategory = columnMapping.category ? row[columnMapping.category] || '' : ''
+        const resolvedCategory = row[columnMapping.category] || ''
         const resolvedBank = bankName && bankName.trim() ? bankName.trim() : 'Manual'
 
         return {
@@ -146,6 +147,7 @@ export default function UploadClean({ transactions, setTransactions, setCategori
           originalCategory: resolvedCategory,
           reference: '',
           bank: resolvedBank,
+          sourceFile: file.name,
         }
       })
 
@@ -153,7 +155,7 @@ export default function UploadClean({ transactions, setTransactions, setCategori
         Date: columnMapping.date,
         'Merchant/Description': columnMapping.description,
         Amount: columnMapping.amount,
-        Category: columnMapping.category || '—',
+        Category: columnMapping.category,
         Bank: bankName && bankName.trim() ? bankName.trim() : 'Manual',
       }
 
@@ -300,6 +302,13 @@ export default function UploadClean({ transactions, setTransactions, setCategori
   const totalTransactions = uploadedFiles.reduce((sum, f) => sum + f.txCount, 0)
   const needsMapping = uploadedFiles.filter((f) => f.status === 'needs-mapping')
 
+  // Apply issue filter to transactions for preview
+  const filteredTransactions = transactions.filter((tx) => {
+    if (issueFilter === 'issues') return tx.issues?.length > 0
+    if (issueFilter === 'no-issues') return !tx.issues || tx.issues.length === 0
+    return true
+  })
+
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -441,9 +450,9 @@ export default function UploadClean({ transactions, setTransactions, setCategori
             We couldn&apos;t auto-detect the bank format. Please map the columns below.
           </p>
 
-          {/* Required mappings: Date, Description, Amount */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {['date', 'description', 'amount'].map((field) => (
+          {/* Required mappings: Date, Description, Amount, Category */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {['date', 'description', 'amount', 'category'].map((field) => (
               <div key={field}>
                 <label className="block text-sm font-medium text-gray-700 capitalize mb-1">
                   {field} *
@@ -464,25 +473,8 @@ export default function UploadClean({ transactions, setTransactions, setCategori
             ))}
           </div>
 
-          {/* Optional: Category mapping + Bank name */}
+          {/* Optional: Bank name */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Category <span className="text-gray-400 font-normal">(optional)</span>
-              </label>
-              <select
-                value={file.columnMapping.category}
-                onChange={(e) => updateFileMapping(file.id, 'category', e.target.value)}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-              >
-                <option value="">No category column</option>
-                {file.rawHeaders.map((h) => (
-                  <option key={h} value={h}>
-                    {h}
-                  </option>
-                ))}
-              </select>
-            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Bank Name <span className="text-gray-400 font-normal">(optional)</span>
@@ -530,16 +522,35 @@ export default function UploadClean({ transactions, setTransactions, setCategori
       {/* Data Preview Table */}
       {transactions.length > 0 && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          <div className="p-4 border-b border-gray-200">
+          <div className="p-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3">
             <h3 className="text-lg font-semibold">
-              Cleaned Data Preview ({transactions.length} transactions)
+              Cleaned Data Preview ({filteredTransactions.length} of {transactions.length} transactions)
             </h3>
+            <div className="flex gap-1">
+              {[
+                { key: 'all', label: 'All' },
+                { key: 'issues', label: 'Issues' },
+                { key: 'no-issues', label: 'No Issues' },
+              ].map((f) => (
+                <button
+                  key={f.key}
+                  onClick={() => setIssueFilter(f.key)}
+                  className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                    issueFilter === f.key
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  {['Date', 'Description', 'Amount', 'Bank', 'Issues'].map((h) => (
+                  {['Date', 'Description', 'Amount', 'Bank', 'Source File', 'Issues'].map((h) => (
                     <th
                       key={h}
                       className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase"
@@ -550,7 +561,7 @@ export default function UploadClean({ transactions, setTransactions, setCategori
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {transactions.slice(0, 50).map((tx) => (
+                {filteredTransactions.slice(0, 50).map((tx) => (
                   <tr key={tx.id} className={tx.issues?.length > 0 ? 'bg-yellow-50' : ''}>
                     <td className="px-4 py-3 text-sm whitespace-nowrap">{tx.date}</td>
                     <td className="px-4 py-3 text-sm max-w-xs truncate">{tx.description}</td>
@@ -562,6 +573,7 @@ export default function UploadClean({ transactions, setTransactions, setCategori
                       £{tx.amount.toFixed(2)}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500">{tx.bank}</td>
+                    <td className="px-4 py-3 text-sm text-gray-400 max-w-xs truncate">{tx.sourceFile}</td>
                     <td className="px-4 py-3 text-sm">
                       {tx.issues?.map((issue, i) => (
                         <span
@@ -577,9 +589,9 @@ export default function UploadClean({ transactions, setTransactions, setCategori
               </tbody>
             </table>
           </div>
-          {transactions.length > 50 && (
+          {filteredTransactions.length > 50 && (
             <div className="p-3 text-center text-sm text-gray-500 bg-gray-50">
-              Showing first 50 of {transactions.length} transactions
+              Showing first 50 of {filteredTransactions.length} transactions
             </div>
           )}
         </div>

@@ -57,7 +57,7 @@ export default function About() {
         <p className="text-sm text-gray-600 mb-3">
           At minimum, your file needs these columns (auto-detected for supported banks):
         </p>
-        <div className="grid grid-cols-3 gap-3 text-sm">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
           <div className="bg-blue-50 rounded-lg p-3 text-center">
             <div className="font-semibold text-blue-700">Date</div>
             <div className="text-gray-500 text-xs">Transaction date</div>
@@ -69,6 +69,10 @@ export default function About() {
           <div className="bg-blue-50 rounded-lg p-3 text-center">
             <div className="font-semibold text-blue-700">Amount</div>
             <div className="text-gray-500 text-xs">Transaction amount</div>
+          </div>
+          <div className="bg-blue-50 rounded-lg p-3 text-center">
+            <div className="font-semibold text-blue-700">Category</div>
+            <div className="text-gray-500 text-xs">Spending category</div>
           </div>
         </div>
       </div>
@@ -118,7 +122,7 @@ export default function About() {
             },
             {
               q: 'My bank isn\'t auto-detected. What do I do?',
-              a: 'Use the manual column mapping. Select which columns correspond to Date, Description, and Amount.',
+              a: 'Use the manual column mapping. Select which columns correspond to Date, Description, Amount, and Category.',
             },
             {
               q: 'Where are my category rules saved?',

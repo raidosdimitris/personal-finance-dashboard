@@ -129,6 +129,7 @@ export function cleanTransactions(rawTransactions) {
     originalCategory: tx.originalCategory || '',
     reference: stripSensitiveData(tx.reference || ''),
     bank: tx.bank || 'Unknown',
+    sourceFile: tx.sourceFile || '',
     category: '',
   }))
 
