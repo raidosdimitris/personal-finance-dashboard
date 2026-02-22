@@ -25,6 +25,21 @@ function InfoTooltip({ text }) {
   )
 }
 
+/**
+ * Format a YYYY-MM string to a readable month label (e.g. "Jan 2025").
+ * Returns the original string if parsing fails.
+ */
+function formatMonth(ym) {
+  if (!ym || typeof ym !== 'string') return ym || ''
+  const parts = ym.split('-')
+  if (parts.length < 2) return ym
+  const year = parseInt(parts[0], 10)
+  const month = parseInt(parts[1], 10)
+  if (isNaN(year) || isNaN(month) || month < 1 || month > 12) return ym
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  return `${monthNames[month - 1]} ${year}`
+}
+
 export default function Dashboard({ transactions }) {
   const [dateRange, setDateRange] = useState({ start: '', end: '' })
   const [selectedCategory, setSelectedCategory] = useState('all')
@@ -111,8 +126,8 @@ export default function Dashboard({ transactions }) {
     const current = monthlyData[monthlyData.length - 1]
     const previous = monthlyData[monthlyData.length - 2]
     const diff = current[1] - previous[1]
-    const pct = previous[1] > 0 ? ((diff / previous[1]) * 100).toFixed(1) : 0
-    return { current: current[1], previous: previous[1], diff, pct, currentMonth: current[0], previousMonth: previous[0] }
+    const pct = previous[1] > 0 ? ((diff / previous[1]) * 100).toFixed(1) : '0.0'
+    return { current: current[1], previous: previous[1], diff, pct: Number(pct), currentMonth: current[0], previousMonth: previous[0] }
   }, [monthlyData])
 
   // Chart data
@@ -214,10 +229,13 @@ export default function Dashboard({ transactions }) {
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
             <div className="text-sm text-gray-500">
               vs Previous Month
-              <InfoTooltip text={`Compares spending between ${monthComparison.currentMonth} and ${monthComparison.previousMonth}. Green = you spent less than last month. Red = you spent more.`} />
+              <InfoTooltip text={`Compares spending between ${formatMonth(monthComparison.currentMonth)} (£${monthComparison.current.toFixed(2)}) and ${formatMonth(monthComparison.previousMonth)} (£${monthComparison.previous.toFixed(2)}). Negative (green) = you spent less than last month. Positive (red) = you spent more.`} />
             </div>
-            <div className={`text-2xl font-bold ${monthComparison.diff <= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {monthComparison.diff > 0 ? '+' : ''}{monthComparison.pct}%
+            <div className={`text-2xl font-bold ${monthComparison.pct <= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {monthComparison.pct > 0 ? '+' : ''}{monthComparison.pct.toFixed(1)}%
+            </div>
+            <div className="text-xs text-gray-400 mt-1">
+              {formatMonth(monthComparison.currentMonth)} vs {formatMonth(monthComparison.previousMonth)}
             </div>
           </div>
         )}
@@ -265,7 +283,7 @@ export default function Dashboard({ transactions }) {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h3 className="text-lg font-semibold mb-4">Top Categories</h3>
           <div className="space-y-2">
-            {categoryData.map(([name, amount], i) => {
+            {categoryData.map(([name, amount]) => {
               const pct = totalSpending > 0 ? ((amount / totalSpending) * 100).toFixed(1) : 0
               return (
                 <div key={name} className="flex items-center justify-between">
@@ -291,15 +309,21 @@ export default function Dashboard({ transactions }) {
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <h3 className="text-lg font-semibold mb-4">Top Merchants</h3>
         <div className="space-y-2">
-          {topMerchants.map(([name, amount], i) => (
-            <div key={name} className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-400 w-6">{i + 1}.</span>
-                <span className="text-sm font-medium">{name}</span>
+          {topMerchants.map(([name, amount], i) => {
+            const pct = totalSpending > 0 ? ((amount / totalSpending) * 100).toFixed(1) : 0
+            return (
+              <div key={name} className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-400 w-6">{i + 1}.</span>
+                  <span className="text-sm font-medium">{name}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-gray-400">{pct}%</span>
+                  <span className="text-sm text-gray-900 font-semibold w-24 text-right">£{amount.toFixed(2)}</span>
+                </div>
               </div>
-              <span className="text-sm text-gray-900 font-semibold">£{amount.toFixed(2)}</span>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
 
