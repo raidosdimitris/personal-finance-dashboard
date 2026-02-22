@@ -45,7 +45,7 @@ function formatMonth(ym) {
    ============================================================ */
 ChartJS.defaults.color = 'rgba(240,244,255,0.35)'
 ChartJS.defaults.borderColor = 'rgba(255,255,255,0.06)'
-ChartJS.defaults.font.family = "'DM Mono', monospace"
+ChartJS.defaults.font.family = "'Barlow', sans-serif"
 
 export default function Dashboard({ transactions }) {
   const [dateRange, setDateRange] = useState({ start: '', end: '' })
@@ -136,9 +136,9 @@ export default function Dashboard({ transactions }) {
     datasets: [{
       label: 'Spending (£)',
       data: monthlyData.map(([, v]) => v),
-      backgroundColor: 'rgba(0,245,196,0.6)',
-      hoverBackgroundColor: 'rgba(0,245,196,0.8)',
-      borderColor: 'rgba(0,245,196,0.9)',
+      backgroundColor: 'rgba(167,139,250,0.6)',
+      hoverBackgroundColor: 'rgba(167,139,250,0.8)',
+      borderColor: 'rgba(167,139,250,0.9)',
       borderWidth: 1,
       borderRadius: 6,
     }],
