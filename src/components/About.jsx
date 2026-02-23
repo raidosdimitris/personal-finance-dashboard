@@ -151,7 +151,7 @@ export default function About() {
             <li>You&apos;ll see a list of requests — this is <strong>completely normal</strong>. These are the files your browser needs to display the dashboard. See the full breakdown below.</li>
             <li>Now click the 🚫 clear button (top-left of the Network panel) to clear the list</li>
             <li>Upload a file as normal</li>
-            <li>Look at the Network tab again — <strong>no new requests appear</strong>. Your data was processed entirely inside your browser without contacting any server.</li>
+            <li>Look at the Network tab again — you may see <strong>one or two requests</strong>, and both are harmless: a tiny embedded arrow icon (a <code style={{ background: 'rgba(255,255,255,0.08)', padding: '0.1rem 0.3rem', borderRadius: '4px', fontSize: '0.8rem' }}>data:</code> image built into the CSS that never leaves your browser) and a font file loading from the dashboard&apos;s own site. <strong>No financial data is sent anywhere</strong> — your data was processed entirely inside your browser.</li>
           </ol>
         </div>
 
