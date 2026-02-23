@@ -148,8 +148,9 @@ export default function About() {
             <li>Open the dashboard in your browser</li>
             <li>Press <strong>F12</strong> (or right-click → &quot;Inspect&quot;) to open Developer Tools</li>
             <li>Click the <strong>Network</strong> tab</li>
-            <li>Upload a file as normal</li>
-            <li>Watch the Network tab — you&apos;ll see <strong>zero outbound requests</strong> carrying your data. The only requests are for loading the app itself.</li>
+            <li>Click the 🚫 clear button (top-left of the Network panel) to clear existing requests</li>
+            <li>Now upload a file as normal</li>
+            <li>Watch the Network tab — <strong>no new requests will appear</strong>. The requests you see when the page first loads (status 200 or 304) are just the app&apos;s own code files (JavaScript, CSS, fonts). After clearing and uploading, you should see <strong>zero new entries</strong> — proof that your data stays in your browser.</li>
           </ol>
         </div>
 
