@@ -92,6 +92,7 @@ function PrivacyPopup({ onAccept }) {
         </button>
       </div>
     </div>
+    </>
   )
 }
 
@@ -400,9 +401,9 @@ export default function UploadClean({ transactions, setTransactions, setCategori
 
   /* ============ RENDER ============ */
   return (
-    <div className="section-stack">
-      {/* Privacy Popup */}
+    <>
       {showPrivacyPopup && <PrivacyPopup onAccept={handlePrivacyAccept} />}
+      <div className="section-stack">
 
       {/* Upload Panel */}
       <div className="glass-panel glass-panel--static panel-body">
@@ -667,5 +668,6 @@ export default function UploadClean({ transactions, setTransactions, setCategori
         </div>
       )}
     </div>
+    </>
   )
 }
