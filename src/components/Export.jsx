@@ -77,14 +77,32 @@ export default function Export({ transactions }) {
     }],
   }
 
+  /* CSV formula injection protection: prefix dangerous characters */
+  const sanitizeCellValue = (value) => {
+    if (typeof value !== 'string') return value
+    const dangerousChars = ['=', '+', '-', '@', '\t', '\r']
+    if (dangerousChars.some((ch) => value.startsWith(ch))) {
+      return "'" + value
+    }
+    return value
+  }
+
   const downloadCSV = () => {
-    const data = transactions.map((tx) => ({
+    const rawData = transactions.map((tx) => ({
       Date: tx.date,
       Description: tx.description,
       Amount: tx.amount.toFixed(2),
       Category: tx.category,
       Bank: tx.bank,
     }))
+    /* Sanitize all string values to prevent formula injection in spreadsheet apps */
+    const data = rawData.map((row) => {
+      const sanitized = {}
+      for (const [key, val] of Object.entries(row)) {
+        sanitized[key] = sanitizeCellValue(val)
+      }
+      return sanitized
+    })
     const csv = Papa.unparse(data)
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)

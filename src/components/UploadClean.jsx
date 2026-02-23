@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import { detectBank, mapTransaction } from '../utils/bankDetector'
@@ -7,14 +7,116 @@ import { categoriseAll } from '../utils/categoriser'
 
 let fileIdCounter = 0
 
+/* ============ PRIVACY POPUP COMPONENT ============ */
+function PrivacyPopup({ onAccept }) {
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 100,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'rgba(0, 0, 0, 0.7)',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
+        padding: '1rem',
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="privacy-popup-title"
+    >
+      <div
+        className="glass-panel glass-panel--elevated"
+        style={{
+          maxWidth: '32rem',
+          width: '100%',
+          padding: '2rem',
+          position: 'relative',
+        }}
+      >
+        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+          <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }} aria-hidden="true">🔒</div>
+          <h2
+            id="privacy-popup-title"
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: '1.25rem',
+              color: 'var(--text-primary)',
+              marginBottom: '0.5rem',
+            }}
+          >
+            Your Privacy Matters
+          </h2>
+        </div>
+
+        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: '1.7' }}>
+          <p style={{ marginBottom: '0.75rem' }}>
+            Before you upload, here&apos;s what you should know:
+          </p>
+          <ul style={{ paddingLeft: '1.25rem', listStyleType: 'disc', marginBottom: '1rem' }}>
+            <li style={{ marginBottom: '0.375rem' }}>
+              <strong style={{ color: 'var(--text-primary)' }}>Your data is processed 100% locally</strong> — everything runs in your browser. No servers, no databases, no cloud.
+            </li>
+            <li style={{ marginBottom: '0.375rem' }}>
+              <strong style={{ color: 'var(--text-primary)' }}>Nothing is sent anywhere</strong> — a Content Security Policy blocks all outbound network requests from JavaScript.
+            </li>
+            <li style={{ marginBottom: '0.375rem' }}>
+              <strong style={{ color: 'var(--text-primary)' }}>Data disappears when you close the tab</strong> — your transaction data is held in browser memory only and is not saved to disk.
+            </li>
+            <li>
+              <strong style={{ color: 'var(--text-primary)' }}>We recommend cleaning your files</strong> — remove sensitive columns (account numbers, balances) and keep only Date, Category, Merchant, and Amount.
+            </li>
+          </ul>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+            You can verify this yourself by checking the Network tab in your browser&apos;s DevTools (F12), or by reviewing the{' '}
+            <a
+              href="https://github.com/raidosdimitris/personal-finance-dashboard"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: 'var(--accent-primary)' }}
+            >
+              open-source code
+            </a>.
+          </p>
+        </div>
+
+        <button
+          onClick={onAccept}
+          className="btn btn-primary w-full"
+          style={{ marginTop: '1.5rem' }}
+          autoFocus
+        >
+          I Understand
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function UploadClean({ transactions, setTransactions, setCategorisedTransactions }) {
   const [dragOver, setDragOver] = useState(false)
   const [stats, setStats] = useState(null)
   const [error, setError] = useState(null)
   const [validationInfo, setValidationInfo] = useState(null)
   const [issueFilter, setIssueFilter] = useState('all')
-
   const [uploadedFiles, setUploadedFiles] = useState([])
+
+  /* ============ PRIVACY POPUP STATE ============ */
+  const [showPrivacyPopup, setShowPrivacyPopup] = useState(false)
+
+  useEffect(() => {
+    const acknowledged = localStorage.getItem('finance-dashboard-privacy-acknowledged')
+    if (!acknowledged) {
+      setShowPrivacyPopup(true)
+    }
+  }, [])
+
+  const handlePrivacyAccept = () => {
+    localStorage.setItem('finance-dashboard-privacy-acknowledged', 'true')
+    setShowPrivacyPopup(false)
+  }
 
   /* ============ PROCESSING LOGIC (unchanged) ============ */
   const finishProcessing = useCallback((files) => {
@@ -299,6 +401,9 @@ export default function UploadClean({ transactions, setTransactions, setCategori
   /* ============ RENDER ============ */
   return (
     <div className="section-stack">
+      {/* Privacy Popup */}
+      {showPrivacyPopup && <PrivacyPopup onAccept={handlePrivacyAccept} />}
+
       {/* Upload Panel */}
       <div className="glass-panel glass-panel--static panel-body">
         <h2 className="section-title" style={{ marginBottom: '1rem' }}>Upload Bank Statements</h2>
