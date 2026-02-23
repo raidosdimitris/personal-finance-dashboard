@@ -92,7 +92,6 @@ function PrivacyPopup({ onAccept }) {
         </button>
       </div>
     </div>
-    </>
   )
 }
 
