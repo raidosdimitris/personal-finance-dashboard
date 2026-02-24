@@ -1,3 +1,4 @@
+import ReactDOM from "react-dom"
 import { useState, useCallback, useEffect } from 'react'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
@@ -10,11 +11,12 @@ let fileIdCounter = 0
 /* ============ PRIVACY POPUP COMPONENT ============ */
 function PrivacyPopup({ onAccept }) {
   return (
+    ReactDOM.createPortal(
     <div
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 100,
+        zIndex: 9999,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -22,6 +24,8 @@ function PrivacyPopup({ onAccept }) {
         backdropFilter: 'blur(8px)',
         WebkitBackdropFilter: 'blur(8px)',
         padding: '1rem',
+        overflowY: 'auto',
+        WebkitOverflowScrolling: 'touch',
       }}
       role="dialog"
       aria-modal="true"
@@ -34,6 +38,8 @@ function PrivacyPopup({ onAccept }) {
           width: '100%',
           padding: '2rem',
           position: 'relative',
+          margin: 'auto',
+          flexShrink: 0,
         }}
       >
         <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
@@ -91,7 +97,9 @@ function PrivacyPopup({ onAccept }) {
           I Understand
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
+    )
   )
 }
 
