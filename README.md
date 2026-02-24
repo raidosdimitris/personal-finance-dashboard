@@ -35,6 +35,7 @@
 - ✏️ **Manual Overrides** — Click any category to change it; add custom categories
 - 📊 **Interactive Dashboard** — Monthly spending, category breakdown (donut), top merchants, recurring payments
 - 📈 **Income vs Expenses** — See your net position at a glance
+- 🔮 **Projections** — Forecast next month's spending by category and merchant using weighted moving averages
 - 🔍 **Filters** — Date range and category filters for insights
 - 💾 **Export** — CSV, chart PNGs, and PDF summary reports
 - 🔒 **100% Private** — No server, no uploads, no tracking. Everything runs in your browser.
@@ -94,6 +95,55 @@ Open [http://localhost:5173/personal-finance-dashboard/](http://localhost:5173/p
 - **SheetJS (xlsx)** — Excel parsing
 - **Chart.js** + **react-chartjs-2** — charts
 - **jsPDF** — PDF export
+
+---
+
+## 💡 Why This Stack & Architecture
+
+> This section explains the reasoning behind every technical choice. If you're a developer reviewing this repo, this is how I think about building software — even when the code itself was vibe-coded with AI assistance.
+
+### The Core Constraint: Privacy First
+
+The single most important architectural decision was **100% client-side processing**. Financial data is deeply personal. No server means no breach surface, no compliance overhead, no trust required. Users can verify this themselves — open DevTools, check the Network tab, and see zero outbound requests with their data.
+
+This constraint shaped every library choice:
+
+### Why React + Vite (not Next.js, not a server framework)
+
+- **No SSR needed** — there's no server, no API routes, no database. A static SPA is the simplest correct architecture.
+- **Vite** over CRA because it's faster, leaner, and doesn't carry webpack baggage. For a tool that ships as static files to GitHub Pages, build speed and bundle size matter.
+- **React 18** because the component model fits naturally — each step (Upload → Clean → Categorise → Dashboard → Export) maps to a component with clear data flow.
+
+### Why Tailwind CSS
+
+- Utility-first means the styling is co-located with the markup. In a project where the UI was iterated rapidly with AI assistance, this kept the feedback loop tight — no jumping between CSS files.
+- The glassmorphism theme is built on top of Tailwind's utilities plus custom CSS properties, keeping the design system consistent without a heavy UI library.
+
+### Why PapaParse + SheetJS (not a custom parser)
+
+- Bank CSV formats are wildly inconsistent. PapaParse handles edge cases (quoted fields, encoding, line endings) that a hand-rolled parser would miss.
+- SheetJS adds Excel support with minimal overhead. Users shouldn't need to convert files before uploading.
+- Both run entirely in-browser — no server round-trips.
+
+### Why Chart.js (not D3, not Recharts)
+
+- **Chart.js** hits the sweet spot: good-looking charts out of the box, responsive, and well-documented. D3 would be overkill for bar/donut charts. Recharts adds unnecessary abstraction.
+- **react-chartjs-2** provides thin React bindings without fighting the library.
+
+### Why jsPDF (not server-generated PDFs)
+
+- PDF generation must happen client-side to maintain the privacy guarantee. jsPDF is mature, handles tables via the autotable plugin, and produces clean output.
+
+### On Being "Vibe Coded"
+
+This dashboard was built by prompting Claude (Anthropic) and iterating on the output. That's a deliberate choice, not a shortcut:
+
+- **The architecture, data flow, and privacy model were designed by me.** The AI helped write the implementation.
+- **Every library was chosen with intent**, not because an AI suggested it. This section exists to prove that.
+- **The code is readable and maintainable** — because I reviewed and shaped it, not just accepted the first output.
+
+AI-assisted development is a tool. The thinking behind *what* to build and *why* is still human. This README is the proof.
+
 
 ---
 
