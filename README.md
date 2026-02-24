@@ -100,7 +100,7 @@ Open [http://localhost:5173/personal-finance-dashboard/](http://localhost:5173/p
 
 ## 💡 Why This Stack & Architecture
 
-> This section explains the reasoning behind every technical choice. If you're a developer reviewing this repo, this is how I think about building software — even when the code itself was vibe-coded with AI assistance.
+> This section explains the reasoning behind every technical choice.
 
 ### The Core Constraint: Privacy First
 
@@ -139,10 +139,8 @@ This constraint shaped every library choice:
 This dashboard was built by prompting Claude (Anthropic) and iterating on the output. That's a deliberate choice, not a shortcut:
 
 - **The architecture, data flow, and privacy model were designed by me.** The AI helped write the implementation.
-- **Every library was chosen with intent**, not because an AI suggested it. This section exists to prove that.
-- **The code is readable and maintainable** — because I reviewed and shaped it, not just accepted the first output.
 
-AI-assisted development is a tool. The thinking behind *what* to build and *why* is still human. This README is the proof.
+AI-assisted development is a tool. The thinking behind *what* to build and *why* is still human.
 
 
 ---
