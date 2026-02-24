@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -43,16 +43,17 @@ function getNextMonth(ym) {
 }
 
 /**
- * Weighted moving average — recent months count more.
- * With 3 months: weights [1, 2, 3] (most recent = 3).
- * Falls back to simple average if fewer than 2 months.
+ * Median of an array of numbers (ignores zeros for sparse categories).
+ * Uses only non-zero values to avoid underestimating recurring spending.
  */
-function weightedAverage(values) {
-  if (values.length === 0) return 0
-  if (values.length === 1) return values[0]
-  const weights = values.map((_, i) => i + 1)
-  const totalWeight = weights.reduce((a, b) => a + b, 0)
-  return values.reduce((sum, v, i) => sum + v * weights[i], 0) / totalWeight
+function median(values) {
+  const nonZero = values.filter(v => v > 0)
+  if (nonZero.length === 0) return 0
+  const sorted = [...nonZero].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 0
+    ? (sorted[mid - 1] + sorted[mid]) / 2
+    : sorted[mid]
 }
 
 /**
@@ -74,27 +75,43 @@ function TrendBadge({ direction }) {
   return <span className="trend-badge trend-stable">→ Stable</span>
 }
 
+const PERIOD_OPTIONS = [
+  { value: 'month', label: 'Monthly' },
+  { value: 'quarter', label: 'Quarterly' },
+  { value: 'year', label: 'Yearly' },
+]
+
 export default function Projections({ transactions }) {
+  const [period, setPeriod] = useState('month')
   const spending = useMemo(() => transactions.filter(tx => tx.amount < 0), [transactions])
 
   const sortedMonths = useMemo(() => {
     const monthSet = new Set()
     spending.forEach(tx => {
-      const m = tx.date?.substring(0, 7)
-      if (m) monthSet.add(m)
+      const d = tx.date
+      if (!d || typeof d !== 'string') return
+      // Extract YYYY-MM — handles ISO dates (YYYY-MM-DD) and similar
+      const match = d.match(/^(\d{4})-(\d{2})/)
+      if (match) monthSet.add(`${match[1]}-${match[2]}`)
     })
     return [...monthSet].sort()
   }, [spending])
 
   const nextMonth = sortedMonths.length > 0 ? getNextMonth(sortedMonths[sortedMonths.length - 1]) : null
 
+  const periodMultiplier = period === 'quarter' ? 3 : period === 'year' ? 12 : 1
+  const periodLabel = period === 'quarter' ? 'Quarterly' : period === 'year' ? 'Yearly' : 'Monthly'
+
   /* Category projections */
   const categoryProjections = useMemo(() => {
     if (sortedMonths.length < 2) return []
     const catMonthly = {}
     spending.forEach(tx => {
-      const m = tx.date?.substring(0, 7)
-      if (!m) return
+      const d = tx.date
+      if (!d || typeof d !== 'string') return
+      const match = d.match(/^(\d{4})-(\d{2})/)
+      if (!match) return
+      const m = `${match[1]}-${match[2]}`
       if (!catMonthly[tx.category]) catMonthly[tx.category] = {}
       catMonthly[tx.category][m] = (catMonthly[tx.category][m] || 0) + Math.abs(tx.amount)
     })
@@ -102,14 +119,13 @@ export default function Projections({ transactions }) {
     return Object.entries(catMonthly)
       .map(([cat, months]) => {
         const values = sortedMonths.map(m => months[m] || 0)
-        // Use last 6 months max for projection
         const recent = values.slice(-6)
-        const projected = weightedAverage(recent)
+        const projected = median(recent)
         const trend = trendDirection(recent)
         const avg = recent.reduce((a, b) => a + b, 0) / recent.length
         return { category: cat, projected, trend, avg, monthlyValues: values }
       })
-      .filter(p => p.projected > 0.5) // skip negligible
+      .filter(p => p.projected > 0.5)
       .sort((a, b) => b.projected - a.projected)
   }, [spending, sortedMonths])
 
@@ -118,9 +134,12 @@ export default function Projections({ transactions }) {
     if (sortedMonths.length < 2) return []
     const merchMonthly = {}
     spending.forEach(tx => {
-      const m = tx.date?.substring(0, 7)
+      const d = tx.date
+      if (!d || typeof d !== 'string') return
+      const match = d.match(/^(\d{4})-(\d{2})/)
+      if (!match) return
+      const m = `${match[1]}-${match[2]}`
       const name = tx.description || 'Unknown'
-      if (!m) return
       if (!merchMonthly[name]) merchMonthly[name] = {}
       merchMonthly[name][m] = (merchMonthly[name][m] || 0) + Math.abs(tx.amount)
     })
@@ -131,7 +150,7 @@ export default function Projections({ transactions }) {
         if (activeMonths.length < 2) return null
         const values = sortedMonths.map(m => months[m] || 0)
         const recent = values.slice(-6)
-        const projected = weightedAverage(recent)
+        const projected = median(recent)
         const trend = trendDirection(recent.filter(v => v > 0))
         return { merchant, projected, trend, activeMonths: activeMonths.length }
       })
@@ -189,10 +208,10 @@ export default function Projections({ transactions }) {
   return (
     <div className="section-stack">
       {/* Header */}
-      <div className="glass-panel glass-panel--accent kpi-card" style={{ textAlign: 'center' }}>
+      <div className="glass-panel glass-panel--accent kpi-card projections-header" style={{ textAlign: 'center' }}>
         <div className="kpi-label">
           Projected Spending — {formatMonth(nextMonth)}
-          <InfoTooltip text="Projections use a weighted moving average of up to 6 recent months. More recent months are weighted higher. This is a simple statistical estimate, not a guarantee." />
+          <InfoTooltip text="Projections use the median of up to 6 recent months (excluding months with zero spending in each category). This is more robust against outliers than a simple average." />
         </div>
         <div className="kpi-value kpi-value--danger text-mono">
           <span className="value-negative">£{totalProjected.toFixed(2)}</span>
@@ -252,13 +271,28 @@ export default function Projections({ transactions }) {
 
       {/* Category projections table */}
       <div className="glass-panel glass-panel--static panel-body">
-        <h3 className="section-title" style={{ marginBottom: '1rem' }}>
-          📊 By Category
-          <InfoTooltip text="Projected monthly cost per category based on weighted moving average. Trend compares the last two months." />
-        </h3>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <h3 className="section-title" style={{ marginBottom: 0 }}>
+            📊 By Category
+            <InfoTooltip text="Projected cost per category based on the median of recent monthly spending. Trend compares the last two months." />
+          </h3>
+          <div className="period-toggle">
+            {PERIOD_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                className={`period-btn ${period === opt.value ? 'period-btn--active' : ''}`}
+                onClick={() => setPeriod(opt.value)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div>
           {categoryProjections.map(cp => {
-            const pct = totalProjected > 0 ? ((cp.projected / totalProjected) * 100).toFixed(1) : 0
+            const scaledProjected = cp.projected * periodMultiplier
+            const scaledTotal = totalProjected * periodMultiplier
+            const pct = scaledTotal > 0 ? ((scaledProjected / scaledTotal) * 100).toFixed(1) : 0
             return (
               <div key={cp.category} className="rank-row">
                 <div className="rank-left">
@@ -268,19 +302,24 @@ export default function Projections({ transactions }) {
                 </div>
                 <div className="rank-right">
                   <span className="rank-pct">{pct}%</span>
-                  <span className="rank-amount">£{cp.projected.toFixed(2)}</span>
+                  <span className="rank-amount">£{scaledProjected.toFixed(2)}</span>
                 </div>
               </div>
             )
           })}
         </div>
+        {periodMultiplier > 1 && (
+          <p style={{ color: 'rgba(240,244,255,0.4)', fontSize: '0.75rem', textAlign: 'center', marginTop: '0.75rem' }}>
+            {periodLabel} projections = monthly median × {periodMultiplier}
+          </p>
+        )}
       </div>
 
       {/* Merchant projections table */}
       <div className="glass-panel glass-panel--static panel-body">
         <h3 className="section-title" style={{ marginBottom: '1rem' }}>
           🏪 By Merchant
-          <InfoTooltip text="Top merchants by projected monthly cost. Only merchants appearing in 2+ months are included." />
+          <InfoTooltip text="Top merchants by projected monthly cost (median). Only merchants appearing in 2+ months are included." />
         </h3>
         <div>
           {merchantProjections.map((mp, i) => (

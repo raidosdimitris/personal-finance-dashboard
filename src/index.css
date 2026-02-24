@@ -1881,3 +1881,44 @@ h1, h2, h3 {
   color: rgba(240, 244, 255, 0.5);
   border: 1px solid rgba(240, 244, 255, 0.12);
 }
+
+/* ============================================================
+   PROJECTIONS FIXES
+   ============================================================ */
+
+/* Ensure the projections header tooltip isn't clipped by the sticky tab nav */
+.projections-header {
+  position: relative;
+  z-index: 21;
+  overflow: visible;
+}
+
+/* Period toggle (month / quarter / year) */
+.period-toggle {
+  display: inline-flex;
+  gap: 2px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 8px;
+  padding: 2px;
+}
+
+.period-btn {
+  background: transparent;
+  border: none;
+  color: rgba(240,244,255,0.5);
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.75rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.period-btn:hover {
+  color: rgba(240,244,255,0.8);
+}
+
+.period-btn--active {
+  background: rgba(99,102,241,0.4);
+  color: #f0f4ff;
+}
