@@ -1955,3 +1955,67 @@ h1, h2, h3 {
   transform: translateX(-50%) translateY(-100%);
   z-index: 9999;
 }
+
+/* Portal-based tooltip — renders at body level, above everything */
+.info-tooltip-portal {
+  position: fixed;
+  z-index: 99999;
+  max-width: 300px;
+  padding: 0.75rem 1rem;
+  background: rgba(13, 27, 62, 0.97);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  color: rgba(240, 244, 255, 0.85);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  white-space: pre-line;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  animation: tooltip-fade-in 0.15s ease;
+}
+
+@keyframes tooltip-fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Pagination controls */
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1rem 0 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: 0.75rem;
+}
+
+.pagination-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(240, 244, 255, 0.7);
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.75rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: rgba(99, 102, 241, 0.3);
+  color: #f0f4ff;
+  border-color: rgba(99, 102, 241, 0.5);
+}
+
+.pagination-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.pagination-info {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: rgba(240, 244, 255, 0.45);
+}

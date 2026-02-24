@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -16,25 +17,44 @@ import { getCategoryColour } from '../utils/categoriser'
 ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, Title, Tooltip, Legend)
 
 function InfoTooltip({ text }) {
-  const [pos, setPos] = useState(null)
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState({ top: 0, left: 0 })
+  const triggerRef = useRef(null)
 
-  const handleEnter = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect()
-    setPos({ top: rect.top - 8, left: rect.left + rect.width / 2 })
+  useEffect(() => {
+    if (!open) return
+    const close = () => setOpen(false)
+    window.addEventListener('scroll', close, true)
+    const timer = setTimeout(() => window.addEventListener('click', close, true), 10)
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('click', close, true)
+    }
+  }, [open])
+
+  const toggle = (e) => {
+    e.stopPropagation()
+    if (open) { setOpen(false); return }
+    const rect = triggerRef.current.getBoundingClientRect()
+    setPos({ top: rect.bottom + 8, left: Math.min(rect.left, window.innerWidth - 320) })
+    setOpen(true)
   }
-  const handleLeave = () => setPos(null)
 
   return (
-    <span className="info-tooltip-wrap" onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
-      <span className="info-tooltip-trigger" aria-label="More information">?</span>
-      {pos && (
-        <span
-          className="info-tooltip-content info-tooltip-content--fixed"
-          role="tooltip"
-          style={{ top: pos.top, left: pos.left }}
-        >
+    <span className="info-tooltip-wrap">
+      <button
+        ref={triggerRef}
+        className="info-tooltip-trigger"
+        aria-label="More information"
+        onClick={toggle}
+        type="button"
+      >?</button>
+      {open && createPortal(
+        <div className="info-tooltip-portal" style={{ top: pos.top, left: pos.left }} role="tooltip">
           {text}
-        </span>
+        </div>,
+        document.body
       )}
     </span>
   )
@@ -75,9 +95,6 @@ function getNextYear(y) {
   return String(Number(y) + 1)
 }
 
-/**
- * Compute trend direction and monetary delta between last two periods.
- */
 function trendDirection(values) {
   if (values.length < 2) return { direction: 0, delta: 0 }
   const recent = values[values.length - 1]
@@ -114,13 +131,15 @@ Trend compares the last two completed months.`
 
 export default function Projections({ transactions }) {
   const [period, setPeriod] = useState('month')
+  const [merchPage, setMerchPage] = useState(1)
+  const MERCH_PER_PAGE = 50
+
   const spending = useMemo(() => transactions.filter(tx => tx.amount < 0), [transactions])
   const today = useMemo(() => new Date(), [])
 
   const periodConfig = PERIOD_OPTIONS.find(o => o.value === period)
   const { days: periodDays, lookbackDays, label: periodLabel } = periodConfig
 
-  // Parse all spending transactions with Date objects
   const parsedSpending = useMemo(() => {
     return spending.map(tx => {
       const d = tx.date
@@ -131,14 +150,12 @@ export default function Projections({ transactions }) {
     }).filter(Boolean)
   }, [spending])
 
-  // All unique categories from ALL transactions (not just the window)
   const allCategories = useMemo(() => {
     const cats = new Set()
     transactions.forEach(tx => { if (tx.category) cats.add(tx.category) })
     return [...cats].sort()
   }, [transactions])
 
-  // All unique merchants with 2+ months of activity (from ALL data)
   const allMerchants = useMemo(() => {
     const merchMonths = {}
     parsedSpending.forEach(tx => {
@@ -154,7 +171,6 @@ export default function Projections({ transactions }) {
       .sort()
   }, [parsedSpending])
 
-  // Helper: get period bucket for a date
   const getBucket = (dateObj) => {
     const y = dateObj.getFullYear()
     const m = dateObj.getMonth() + 1
@@ -175,7 +191,6 @@ export default function Projections({ transactions }) {
     return getNextYear(bucket)
   }
 
-  // Sorted period buckets
   const sortedBuckets = useMemo(() => {
     const bucketSet = new Set()
     parsedSpending.forEach(tx => bucketSet.add(getBucket(tx.dateObj)))
@@ -184,7 +199,6 @@ export default function Projections({ transactions }) {
 
   const nextBucket = sortedBuckets.length > 0 ? getNextBucket(sortedBuckets[sortedBuckets.length - 1]) : null
 
-  // Precompute category monthly data (always monthly, for trends)
   const catMonthly = useMemo(() => {
     const data = {}
     parsedSpending.forEach(tx => {
@@ -198,7 +212,6 @@ export default function Projections({ transactions }) {
     return data
   }, [parsedSpending])
 
-  // Precompute category bucket data (for chart x-axis based on period)
   const catBucketData = useMemo(() => {
     const data = {}
     parsedSpending.forEach(tx => {
@@ -210,7 +223,6 @@ export default function Projections({ transactions }) {
     return data
   }, [parsedSpending, period])
 
-  // Precompute merchant monthly data (for trends)
   const merchMonthly = useMemo(() => {
     const data = {}
     parsedSpending.forEach(tx => {
@@ -224,7 +236,6 @@ export default function Projections({ transactions }) {
     return data
   }, [parsedSpending])
 
-  // Sorted months (for trend calculations)
   const sortedMonths = useMemo(() => {
     const monthSet = new Set()
     parsedSpending.forEach(tx => {
@@ -235,14 +246,12 @@ export default function Projections({ transactions }) {
     return [...monthSet].sort()
   }, [parsedSpending])
 
-  // Daily-rate projection engine
   const projections = useMemo(() => {
     const cutoff = new Date(today)
     cutoff.setDate(cutoff.getDate() - lookbackDays)
 
     const windowTxs = parsedSpending.filter(tx => tx.dateObj >= cutoff && tx.dateObj <= today)
 
-    // Sum by category and merchant in window
     const catWindowTotals = {}
     const merchWindowTotals = {}
     windowTxs.forEach(tx => {
@@ -252,7 +261,6 @@ export default function Projections({ transactions }) {
       merchWindowTotals[merch] = (merchWindowTotals[merch] || 0) + amt
     })
 
-    // Category projections — ALL categories, sorted largest to smallest
     const catProjections = allCategories.map(cat => {
       const total = catWindowTotals[cat] || 0
       const dailyRate = total / lookbackDays
@@ -264,7 +272,6 @@ export default function Projections({ transactions }) {
       return { category: cat, projected, trend: direction, trendDelta: delta, bucketValues }
     }).sort((a, b) => b.projected - a.projected)
 
-    // Merchant projections — ALL qualifying merchants, sorted largest to smallest
     const merchProjections = allMerchants.map(merchant => {
       const total = merchWindowTotals[merchant] || 0
       const dailyRate = total / lookbackDays
@@ -281,7 +288,6 @@ export default function Projections({ transactions }) {
   const { catProjections, merchProjections } = projections
   const totalProjected = catProjections.reduce((sum, p) => sum + p.projected, 0)
 
-  /* Chart: historical buckets + projected bar for ALL categories */
   const chartData = useMemo(() => {
     if (sortedBuckets.length < 2 || catProjections.length === 0) return null
     const displayBuckets = [...sortedBuckets.slice(-6), nextBucket]
@@ -314,7 +320,6 @@ export default function Projections({ transactions }) {
     }
   }, [sortedBuckets, catProjections, nextBucket, period])
 
-  /* Not enough data */
   if (sortedMonths.length < 2) {
     return (
       <div className="empty-state">
@@ -324,6 +329,18 @@ export default function Projections({ transactions }) {
       </div>
     )
   }
+
+  // Interpretive text
+  const interpretText = period === 'year'
+    ? `At your current spending rate, you're on track to spend £${totalProjected.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} this year.`
+    : period === 'quarter'
+    ? `At your current spending rate, you'd spend £${totalProjected.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} this quarter.`
+    : `At your current spending rate, you'd spend £${totalProjected.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} this month.`
+
+  // Merchant pagination
+  const totalMerchPages = Math.ceil(merchProjections.length / MERCH_PER_PAGE)
+  const merchStartIdx = (merchPage - 1) * MERCH_PER_PAGE
+  const merchPageItems = merchProjections.slice(merchStartIdx, merchStartIdx + MERCH_PER_PAGE)
 
   return (
     <div className="section-stack">
@@ -336,6 +353,9 @@ export default function Projections({ transactions }) {
         <div className="kpi-value kpi-value--danger text-mono">
           <span className="value-negative">£{totalProjected.toFixed(2)}</span>
         </div>
+        <div className="kpi-sublabel" style={{ color: 'rgba(240,244,255,0.65)', fontSize: '0.8rem', marginBottom: '0.25rem' }}>
+          {interpretText}
+        </div>
         <div className="kpi-sublabel">
           Based on {lookbackDays}-day lookback • {sortedMonths.length} months of data ({formatMonth(sortedMonths[0])} – {formatMonth(sortedMonths[sortedMonths.length - 1])})
         </div>
@@ -345,7 +365,7 @@ export default function Projections({ transactions }) {
               <button
                 key={opt.value}
                 className={`period-btn ${period === opt.value ? 'period-btn--active' : ''}`}
-                onClick={() => setPeriod(opt.value)}
+                onClick={() => { setPeriod(opt.value); setMerchPage(1) }}
               >
                 {opt.label}
               </button>
@@ -437,10 +457,10 @@ export default function Projections({ transactions }) {
           <InfoTooltip text={`Merchants by projected ${periodLabel.toLowerCase()} cost. Same daily-rate formula applied. Only merchants with 2+ months of activity are shown.`} />
         </h3>
         <div>
-          {merchProjections.map((mp, i) => (
+          {merchPageItems.map((mp, i) => (
             <div key={mp.merchant} className="rank-row">
               <div className="rank-left">
-                <span className="rank-num">{i + 1}.</span>
+                <span className="rank-num">{merchStartIdx + i + 1}.</span>
                 <span className="rank-name" style={{ textTransform: 'none' }}>{mp.merchant}</span>
                 <TrendBadge direction={mp.trend} delta={mp.trendDelta} />
               </div>
@@ -453,6 +473,23 @@ export default function Projections({ transactions }) {
             <p style={{ color: 'rgba(240,244,255,0.4)', textAlign: 'center', padding: '1rem' }}>
               No merchants with enough recurring data to project.
             </p>
+          )}
+          {totalMerchPages > 1 && (
+            <div className="pagination-controls">
+              <button
+                className="pagination-btn"
+                disabled={merchPage === 1}
+                onClick={() => setMerchPage(p => p - 1)}
+              >← Prev</button>
+              <span className="pagination-info">
+                Page {merchPage} of {totalMerchPages} • {merchProjections.length} merchants
+              </span>
+              <button
+                className="pagination-btn"
+                disabled={merchPage === totalMerchPages}
+                onClick={() => setMerchPage(p => p + 1)}
+              >Next →</button>
+            </div>
           )}
         </div>
       </div>
