@@ -4,6 +4,7 @@ import Categorise from './components/Categorise'
 import Dashboard from './components/Dashboard'
 import Export from './components/Export'
 import About from './components/About'
+import Projections from './components/Projections'
 
 /* ============================================================
    TAB CONFIGURATION
@@ -13,8 +14,9 @@ const TABS = [
   { id: 'upload', label: 'Upload & Clean', icon: '📤', subtitle: 'Import data', step: 1 },
   { id: 'categorise', label: 'Categorise', icon: '🏷️', subtitle: 'Label transactions', step: 2 },
   { id: 'dashboard', label: 'Dashboard', icon: '📊', subtitle: 'Visualise', step: 3 },
-  { id: 'export', label: 'Export', icon: '💾', subtitle: 'Download', step: 4 },
-  { id: 'about', label: 'About & Privacy', icon: 'ℹ️', subtitle: 'How it works', step: 5 },
+  { id: 'projections', label: 'Projections', icon: '🔮', subtitle: 'Forecast', step: 4 },
+  { id: 'export', label: 'Export', icon: '💾', subtitle: 'Download', step: 5 },
+  { id: 'about', label: 'About & Privacy', icon: 'ℹ️', subtitle: 'How it works', step: 6 },
 ]
 
 export default function App() {
@@ -148,6 +150,9 @@ export default function App() {
                   )}
                   {tab.id === 'dashboard' && (
                     <Dashboard transactions={categorisedTransactions} />
+                  )}
+                  {tab.id === 'projections' && (
+                    <Projections transactions={categorisedTransactions} />
                   )}
                   {tab.id === 'export' && (
                     <Export transactions={categorisedTransactions} />
