@@ -113,31 +113,101 @@ export default function Export({ transactions }) {
     URL.revokeObjectURL(url)
   }
 
+  /* ============ CHART HELPER: percentage label plugin ============ */
+  const percentageLabelPlugin = {
+    id: 'percentageLabels',
+    afterDraw(chart) {
+      if (chart.config.type !== 'doughnut') return
+      const { ctx } = chart
+      const meta = chart.getDatasetMeta(0)
+      const total = meta.total || chart.data.datasets[0].data.reduce((a, b) => a + b, 0)
+
+      meta.data.forEach((arc, i) => {
+        const value = chart.data.datasets[0].data[i]
+        const pct = total > 0 ? ((value / total) * 100).toFixed(1) : 0
+        if (pct < 3) return
+
+        const { x, y } = arc.tooltipPosition()
+        ctx.save()
+        /* White text with dark shadow for readability on any slice colour */
+        ctx.shadowColor = 'rgba(0,0,0,0.6)'
+        ctx.shadowBlur = 3
+        ctx.shadowOffsetX = 1
+        ctx.shadowOffsetY = 1
+        ctx.fillStyle = '#fff'
+        ctx.font = 'bold 11px Helvetica, Arial, sans-serif'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(`${pct}%`, x, y)
+        ctx.restore()
+      })
+    },
+  }
+
+  /* ============ CHART HELPER: white background plugin ============ */
+  const whiteBackgroundPlugin = {
+    id: 'whiteBackground',
+    beforeDraw(chart) {
+      const { ctx, width, height } = chart
+      ctx.save()
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, width, height)
+      ctx.restore()
+    },
+  }
+
+  /* ============ SHARED CHART OPTIONS FOR EXPORT (dark text on white bg) ============ */
+  const exportBarOptions = (showTitle) => ({
+    responsive: false,
+    animation: false,
+    plugins: {
+      legend: { display: false },
+      title: showTitle
+        ? { display: true, text: 'Spending Over Time', color: '#1e293b', font: { size: 14, weight: 'bold' } }
+        : { display: false },
+    },
+    scales: {
+      x: {
+        ticks: { color: '#334155', font: { size: 11 } },
+        grid: { color: 'rgba(0,0,0,0.06)' },
+      },
+      y: {
+        beginAtZero: true,
+        ticks: { color: '#334155', font: { size: 11 }, callback: (v) => `£${v}` },
+        grid: { color: 'rgba(0,0,0,0.06)' },
+      },
+    },
+  })
+
+  const exportDonutOptions = (showTitle) => ({
+    responsive: false,
+    animation: false,
+    plugins: {
+      legend: {
+        position: 'bottom',
+        labels: { boxWidth: 12, color: '#1e293b', font: { size: 11 } },
+      },
+      title: showTitle
+        ? { display: true, text: 'Category Breakdown', color: '#1e293b', font: { size: 14, weight: 'bold' } }
+        : { display: false },
+    },
+  })
+
   const downloadChartPNG = (chartType, filename) => {
     const canvas = document.createElement('canvas')
     canvas.width = 800
     canvas.height = 400
 
     const data = chartType === 'bar' ? barChartData : donutChartData
-    const options = chartType === 'bar'
-      ? {
-          responsive: false,
-          animation: false,
-          plugins: { legend: { display: false } },
-          scales: { y: { beginAtZero: true, ticks: { callback: (v) => `£${v}` } } },
-        }
-      : {
-          responsive: false,
-          animation: false,
-          plugins: {
-            legend: { position: 'bottom', labels: { boxWidth: 12 } },
-          },
-        }
+    const options = chartType === 'bar' ? exportBarOptions(true) : exportDonutOptions(true)
+    const plugins = [whiteBackgroundPlugin]
+    if (chartType !== 'bar') plugins.push(percentageLabelPlugin)
 
     const chart = new ChartJS(canvas, {
       type: chartType === 'bar' ? 'bar' : 'doughnut',
       data,
       options,
+      plugins,
     })
 
     const link = document.createElement('a')
@@ -154,49 +224,9 @@ export default function Export({ transactions }) {
     canvas.height = height
 
     const data = chartType === 'bar' ? barChartData : donutChartData
-
-    const percentageLabelPlugin = {
-      id: 'percentageLabels',
-      afterDraw(chart) {
-        if (chart.config.type !== 'doughnut') return
-        const { ctx } = chart
-        const meta = chart.getDatasetMeta(0)
-        const total = meta.total || chart.data.datasets[0].data.reduce((a, b) => a + b, 0)
-
-        meta.data.forEach((arc, i) => {
-          const value = chart.data.datasets[0].data[i]
-          const pct = total > 0 ? ((value / total) * 100).toFixed(1) : 0
-          if (pct < 3) return
-
-          const { x, y } = arc.tooltipPosition()
-          ctx.save()
-          ctx.fillStyle = '#fff'
-          ctx.font = 'bold 11px sans-serif'
-          ctx.textAlign = 'center'
-          ctx.textBaseline = 'middle'
-          ctx.fillText(`${pct}%`, x, y)
-          ctx.restore()
-        })
-      },
-    }
-
-    const plugins = chartType === 'bar' ? [] : [percentageLabelPlugin]
-
-    const options = chartType === 'bar'
-      ? {
-          responsive: false,
-          animation: false,
-          plugins: { legend: { display: false }, title: { display: true, text: 'Spending Over Time' } },
-          scales: { y: { beginAtZero: true, ticks: { callback: (v) => `£${v}` } } },
-        }
-      : {
-          responsive: false,
-          animation: false,
-          plugins: {
-            legend: { position: 'bottom', labels: { boxWidth: 12 } },
-            title: { display: true, text: 'Category Breakdown' },
-          },
-        }
+    const options = chartType === 'bar' ? exportBarOptions(true) : exportDonutOptions(true)
+    const plugins = [whiteBackgroundPlugin]
+    if (chartType !== 'bar') plugins.push(percentageLabelPlugin)
 
     const chart = new ChartJS(canvas, {
       type: chartType === 'bar' ? 'bar' : 'doughnut',
@@ -210,67 +240,107 @@ export default function Export({ transactions }) {
     return dataURL
   }
 
+  /* ============ PDF HELPERS ============ */
+  const pdfColors = {
+    headerStart: [130, 100, 220],   /* #8264dc — purple */
+    headerEnd: [99, 102, 241],      /* #6366f1 — indigo */
+    accent: [167, 139, 250],        /* #a78bfa */
+    green: [34, 197, 94],
+    red: [239, 68, 68],
+    darkText: [30, 41, 59],         /* #1e293b */
+    mutedText: [100, 116, 139],     /* #64748b */
+    lightBg: [248, 250, 252],       /* #f8fafc */
+    divider: [226, 232, 240],       /* #e2e8f0 */
+  }
+
+  const drawRoundedRect = (doc, x, y, w, h, r, fill) => {
+    doc.setFillColor(...fill)
+    doc.roundedRect(x, y, w, h, r, r, 'F')
+  }
+
+  const drawSectionHeader = (doc, text, y) => {
+    doc.setFillColor(...pdfColors.accent)
+    doc.roundedRect(14, y - 4.5, 3, 7, 1, 1, 'F')
+    doc.setFontSize(13)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(...pdfColors.darkText)
+    doc.text(text, 20, y + 1)
+    return y + 10
+  }
+
+  const addPageFooter = (doc) => {
+    const pageCount = doc.internal.getNumberOfPages()
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i)
+      doc.setFontSize(8)
+      doc.setTextColor(...pdfColors.mutedText)
+      doc.text(
+        `Generated ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}  •  Personal Finance Dashboard`,
+        14,
+        287
+      )
+      doc.text(`Page ${i} of ${pageCount}`, 196, 287, { align: 'right' })
+      /* thin divider above footer */
+      doc.setDrawColor(...pdfColors.divider)
+      doc.setLineWidth(0.3)
+      doc.line(14, 283, 196, 283)
+    }
+  }
+
   const downloadPDF = () => {
     const doc = new jsPDF()
+    const pageWidth = doc.internal.pageSize.getWidth()
 
-    doc.setFontSize(20)
-    doc.text('Personal Finance Report', 14, 20)
-    doc.setFontSize(10)
-    doc.setTextColor(100, 100, 100)
-    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 28)
+    /* ── Header band ── */
+    doc.setFillColor(...pdfColors.headerStart)
+    doc.rect(0, 0, pageWidth, 38, 'F')
+    /* Subtle second band for gradient feel */
+    doc.setFillColor(...pdfColors.headerEnd)
+    doc.rect(pageWidth * 0.5, 0, pageWidth * 0.5, 38, 'F')
 
-    if (timeframe) {
-      doc.text(`Timeframe: ${timeframe.earliest} to ${timeframe.latest}`, 14, 34)
-    }
-
-    doc.setFontSize(14)
-    doc.setTextColor(0, 0, 0)
-    doc.text('Summary', 14, 46)
-    doc.setFontSize(10)
-    doc.text(`Total Transactions: ${transactions.length}`, 14, 54)
-
-    const incomeLabel = 'Total Income: '
-    doc.setTextColor(0, 0, 0)
-    doc.text(incomeLabel, 14, 60)
-    const incomeLabelWidth = doc.getTextWidth(incomeLabel)
-    doc.setTextColor(34, 197, 94)
-    doc.text(`£${totalIncome.toFixed(2)}`, 14 + incomeLabelWidth, 60)
-
-    const spendingLabel = 'Total Spending: '
-    doc.setTextColor(0, 0, 0)
-    doc.text(spendingLabel, 14, 66)
-    const spendingLabelWidth = doc.getTextWidth(spendingLabel)
-    doc.setTextColor(239, 68, 68)
-    doc.text(`£${totalSpending.toFixed(2)}`, 14 + spendingLabelWidth, 66)
-
-    const netLabel = 'Net (Income - Spending): '
-    const netColor = net >= 0 ? [34, 197, 94] : [239, 68, 68]
-    doc.setTextColor(0, 0, 0)
-    doc.text(netLabel, 14, 72)
-    const netLabelWidth = doc.getTextWidth(netLabel)
-    doc.setTextColor(...netColor)
-    doc.text(`£${net.toFixed(2)}`, 14 + netLabelWidth, 72)
+    doc.setTextColor(255, 255, 255)
+    doc.setFontSize(22)
+    doc.setFont('helvetica', 'bold')
+    doc.text('Personal Finance Report', 14, 18)
 
     doc.setFontSize(10)
-    if (net >= 0) {
-      const savedLabel = 'You saved '
-      doc.setTextColor(0, 0, 0)
-      doc.text(savedLabel, 14, 78)
-      const savedLabelWidth = doc.getTextWidth(savedLabel)
-      doc.setTextColor(34, 197, 94)
-      doc.text(`£${net.toFixed(2)}`, 14 + savedLabelWidth, 78)
-    } else {
-      const overspentLabel = 'You overspent by '
-      doc.setTextColor(0, 0, 0)
-      doc.text(overspentLabel, 14, 78)
-      const overspentLabelWidth = doc.getTextWidth(overspentLabel)
-      doc.setTextColor(239, 68, 68)
-      doc.text(`£${Math.abs(net).toFixed(2)}`, 14 + overspentLabelWidth, 78)
-    }
+    doc.setFont('helvetica', 'normal')
+    const dateLine = `Generated: ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`
+    const tfLine = timeframe ? `  •  ${timeframe.earliest} to ${timeframe.latest}` : ''
+    doc.text(dateLine + tfLine, 14, 28)
 
-    doc.setTextColor(0, 0, 0)
-    doc.setFontSize(14)
-    doc.text('Spending by Category', 14, 92)
+    doc.setFontSize(9)
+    doc.text(`${transactions.length} transactions analysed`, 14, 34)
+
+    /* ── Summary cards ── */
+    let y = 50
+
+    const cardW = 56
+    const cardH = 26
+    const cardGap = (pageWidth - 28 - cardW * 3) / 2
+    const cards = [
+      { label: 'Total Income', value: `£${totalIncome.toFixed(2)}`, color: pdfColors.green, bg: [240, 253, 244] },
+      { label: 'Total Spending', value: `£${totalSpending.toFixed(2)}`, color: pdfColors.red, bg: [254, 242, 242] },
+      { label: net >= 0 ? 'Net Savings' : 'Net Overspend', value: `£${Math.abs(net).toFixed(2)}`, color: net >= 0 ? pdfColors.green : pdfColors.red, bg: net >= 0 ? [240, 253, 244] : [254, 242, 242] },
+    ]
+
+    cards.forEach((card, i) => {
+      const cx = 14 + i * (cardW + cardGap)
+      drawRoundedRect(doc, cx, y, cardW, cardH, 3, card.bg)
+      doc.setFontSize(9)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(...pdfColors.mutedText)
+      doc.text(card.label, cx + cardW / 2, y + 9, { align: 'center' })
+      doc.setFontSize(16)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(...card.color)
+      doc.text(card.value, cx + cardW / 2, y + 21, { align: 'center' })
+    })
+
+    y += cardH + 14
+
+    /* ── Spending by Category ── */
+    y = drawSectionHeader(doc, 'Spending by Category', y)
 
     const catBreakdown = {}
     spending.forEach((tx) => {
@@ -285,50 +355,94 @@ export default function Export({ transactions }) {
       })
 
     doc.autoTable({
-      startY: 97,
-      head: [['Category', 'Amount', '%']],
+      startY: y,
+      head: [['Category', 'Amount', '% of Total']],
       body: catRows,
-      theme: 'striped',
-      headStyles: { fillColor: [59, 130, 246] },
+      theme: 'grid',
+      headStyles: {
+        fillColor: [...pdfColors.accent],
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        fontSize: 9,
+        cellPadding: 3,
+      },
+      bodyStyles: {
+        fontSize: 9,
+        textColor: [...pdfColors.darkText],
+        cellPadding: 3,
+      },
+      alternateRowStyles: { fillColor: [...pdfColors.lightBg] },
+      styles: { lineColor: [...pdfColors.divider], lineWidth: 0.3 },
+      columnStyles: {
+        1: { halign: 'right' },
+        2: { halign: 'right' },
+      },
     })
 
-    let currentY = doc.lastAutoTable.finalY + 10
-    if (currentY > 250) {
+    /* ── Top 10 Merchants ── */
+    let currentY = doc.lastAutoTable.finalY + 12
+    if (currentY > 235) {
       doc.addPage()
       currentY = 20
     }
-    doc.setFontSize(14)
-    doc.setTextColor(0, 0, 0)
-    doc.text('Top 10 Merchants', 14, currentY)
+    currentY = drawSectionHeader(doc, 'Top 10 Merchants', currentY)
 
     const merchantRows = topMerchants.map(([name, amount], i) => {
       const pct = totalSpending > 0 ? ((amount / totalSpending) * 100).toFixed(1) : '0.0'
-      return [`${i + 1}.`, name.substring(0, 40), `£${amount.toFixed(2)}`, `${pct}%`]
+      return [`${i + 1}`, name.substring(0, 40), `£${amount.toFixed(2)}`, `${pct}%`]
     })
 
     doc.autoTable({
-      startY: currentY + 5,
-      head: [['#', 'Merchant', 'Amount', '%']],
+      startY: currentY,
+      head: [['#', 'Merchant', 'Amount', '% of Total']],
       body: merchantRows,
-      theme: 'striped',
-      headStyles: { fillColor: [59, 130, 246] },
+      theme: 'grid',
+      headStyles: {
+        fillColor: [...pdfColors.accent],
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        fontSize: 9,
+        cellPadding: 3,
+      },
+      bodyStyles: {
+        fontSize: 9,
+        textColor: [...pdfColors.darkText],
+        cellPadding: 3,
+      },
+      alternateRowStyles: { fillColor: [...pdfColors.lightBg] },
+      styles: { lineColor: [...pdfColors.divider], lineWidth: 0.3 },
+      columnStyles: {
+        0: { cellWidth: 10, halign: 'center' },
+        2: { halign: 'right' },
+        3: { halign: 'right' },
+      },
     })
 
+    /* ── Charts page ── */
     doc.addPage()
-    doc.setFontSize(14)
-    doc.setTextColor(0, 0, 0)
-    doc.text('Charts', 14, 20)
+
+    /* Light header bar for charts page */
+    doc.setFillColor(...pdfColors.lightBg)
+    doc.rect(0, 0, pageWidth, 16, 'F')
+    doc.setFontSize(13)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(...pdfColors.darkText)
+    doc.text('Visual Breakdown', 14, 11)
 
     try {
-      const barDataURL = renderChartToDataURL('bar', 600, 300)
-      doc.addImage(barDataURL, 'PNG', 14, 28, 180, 90)
+      const barDataURL = renderChartToDataURL('bar', 700, 320)
+      doc.addImage(barDataURL, 'PNG', 14, 22, 182, 83)
 
-      const donutDataURL = renderChartToDataURL('doughnut', 600, 300)
-      doc.addImage(donutDataURL, 'PNG', 14, 128, 180, 90)
+      const donutDataURL = renderChartToDataURL('doughnut', 700, 380)
+      doc.addImage(donutDataURL, 'PNG', 14, 115, 182, 95)
     } catch (e) {
       doc.setFontSize(10)
+      doc.setTextColor(...pdfColors.mutedText)
       doc.text('Charts could not be rendered.', 14, 30)
     }
+
+    /* ── Footer on all pages ── */
+    addPageFooter(doc)
 
     doc.save(`finance-report-${new Date().toISOString().split('T')[0]}.pdf`)
   }
