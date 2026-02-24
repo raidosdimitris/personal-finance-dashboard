@@ -1924,3 +1924,26 @@ h1, h2, h3 {
   background: rgba(99,102,241,0.4);
   color: #f0f4ff;
 }
+
+/* ============================================================
+   FIX: Tooltip rendering above sticky nav
+   The sticky tab-nav has z-index: 20. Panels with tooltips
+   need to break out of their stacking context when hovered.
+   ============================================================ */
+.glass-panel:has(.info-tooltip-wrap:hover),
+.chart-container:hover {
+  z-index: 30;
+}
+
+/* Also ensure the projections header tooltip is above the nav */
+.projections-header {
+  position: relative;
+}
+.projections-header:has(.info-tooltip-wrap:hover) {
+  z-index: 30;
+}
+
+/* Info tooltip: use white-space pre-line for multi-line formula tooltips */
+.info-tooltip-content {
+  white-space: pre-line;
+}
