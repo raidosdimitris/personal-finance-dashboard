@@ -35,6 +35,12 @@ function formatMonth(ym) {
   return `${monthNames[month - 1]} ${year}`
 }
 
+function formatQuarter(yq) {
+  if (!yq || typeof yq !== 'string') return yq || ''
+  const [year, q] = yq.split('-Q')
+  return `Q${q} ${year}`
+}
+
 function getNextMonth(ym) {
   const [y, m] = ym.split('-').map(Number)
   const nextM = m === 12 ? 1 : m + 1
@@ -42,9 +48,19 @@ function getNextMonth(ym) {
   return `${nextY}-${String(nextM).padStart(2, '0')}`
 }
 
+function getNextQuarter(yq) {
+  const [y, q] = yq.split('-Q').map(Number)
+  const nextQ = q === 4 ? 1 : q + 1
+  const nextY = q === 4 ? y + 1 : y
+  return `${nextY}-Q${nextQ}`
+}
+
+function getNextYear(y) {
+  return String(Number(y) + 1)
+}
+
 /**
  * Compute trend direction and monetary delta between last two periods.
- * Returns { direction: +1|-1|0, delta: number }
  */
 function trendDirection(values) {
   if (values.length < 2) return { direction: 0, delta: 0 }
@@ -65,33 +81,30 @@ function TrendBadge({ direction, delta }) {
   return <span className="trend-badge trend-stable">→ Stable</span>
 }
 
-const LOOKBACK_OPTIONS = [
-  { value: '30d', label: '30d', days: 30 },
-  { value: '90d', label: '90d', days: 90 },
-  { value: '12m', label: '12m', days: 365 },
-]
-
 const PERIOD_OPTIONS = [
-  { value: 'month', label: 'Monthly', days: 30.44 },
-  { value: 'quarter', label: 'Quarterly', days: 91.31 },
-  { value: 'year', label: 'Yearly', days: 365 },
+  { value: 'month', label: 'Monthly', days: 30.44, lookbackDays: 30 },
+  { value: 'quarter', label: 'Quarterly', days: 91.31, lookbackDays: 90 },
+  { value: 'year', label: 'Yearly', days: 365, lookbackDays: 365 },
 ]
 
-const PERIOD_SUFFIX = { month: '/mo', quarter: '/qtr', year: '/yr' }
+const PROJECTION_FORMULA_TOOLTIP = `How projections are calculated:
+
+1. A lookback window is selected based on the period (30 days for monthly, 90 days for quarterly, 365 days for yearly).
+2. All spending within that window is summed per category/merchant.
+3. A daily spending rate is calculated: total ÷ number of days in the window.
+4. The projection is: daily rate × target period days (30.44 for a month, 91.31 for a quarter, 365 for a year).
+
+Trend compares the last two completed months.`
 
 export default function Projections({ transactions }) {
   const [period, setPeriod] = useState('month')
-  const [lookback, setLookback] = useState('90d')
   const spending = useMemo(() => transactions.filter(tx => tx.amount < 0), [transactions])
-
   const today = useMemo(() => new Date(), [])
 
-  const lookbackDays = LOOKBACK_OPTIONS.find(o => o.value === lookback).days
-  const periodDays = PERIOD_OPTIONS.find(o => o.value === period).days
-  const periodSuffix = PERIOD_SUFFIX[period]
-  const periodLabel = PERIOD_OPTIONS.find(o => o.value === period).label
+  const periodConfig = PERIOD_OPTIONS.find(o => o.value === period)
+  const { days: periodDays, lookbackDays, label: periodLabel } = periodConfig
 
-  // Parse all spending transactions with proper Date objects
+  // Parse all spending transactions with Date objects
   const parsedSpending = useMemo(() => {
     return spending.map(tx => {
       const d = tx.date
@@ -102,7 +115,100 @@ export default function Projections({ transactions }) {
     }).filter(Boolean)
   }, [spending])
 
-  // Sorted months for chart history
+  // All unique categories from ALL transactions (not just the window)
+  const allCategories = useMemo(() => {
+    const cats = new Set()
+    transactions.forEach(tx => { if (tx.category) cats.add(tx.category) })
+    return [...cats].sort()
+  }, [transactions])
+
+  // All unique merchants with 2+ months of activity (from ALL data)
+  const allMerchants = useMemo(() => {
+    const merchMonths = {}
+    parsedSpending.forEach(tx => {
+      const name = tx.description || 'Unknown'
+      if (!merchMonths[name]) merchMonths[name] = new Set()
+      const y = tx.dateObj.getFullYear()
+      const m = String(tx.dateObj.getMonth() + 1).padStart(2, '0')
+      merchMonths[name].add(`${y}-${m}`)
+    })
+    return Object.entries(merchMonths)
+      .filter(([, months]) => months.size >= 2)
+      .map(([name]) => name)
+      .sort()
+  }, [parsedSpending])
+
+  // Helper: get period bucket for a date
+  const getBucket = (dateObj) => {
+    const y = dateObj.getFullYear()
+    const m = dateObj.getMonth() + 1
+    if (period === 'month') return `${y}-${String(m).padStart(2, '0')}`
+    if (period === 'quarter') return `${y}-Q${Math.ceil(m / 3)}`
+    return String(y)
+  }
+
+  const formatBucket = (bucket) => {
+    if (period === 'month') return formatMonth(bucket)
+    if (period === 'quarter') return formatQuarter(bucket)
+    return bucket
+  }
+
+  const getNextBucket = (bucket) => {
+    if (period === 'month') return getNextMonth(bucket)
+    if (period === 'quarter') return getNextQuarter(bucket)
+    return getNextYear(bucket)
+  }
+
+  // Sorted period buckets
+  const sortedBuckets = useMemo(() => {
+    const bucketSet = new Set()
+    parsedSpending.forEach(tx => bucketSet.add(getBucket(tx.dateObj)))
+    return [...bucketSet].sort()
+  }, [parsedSpending, period])
+
+  const nextBucket = sortedBuckets.length > 0 ? getNextBucket(sortedBuckets[sortedBuckets.length - 1]) : null
+
+  // Precompute category monthly data (always monthly, for trends)
+  const catMonthly = useMemo(() => {
+    const data = {}
+    parsedSpending.forEach(tx => {
+      const y = tx.dateObj.getFullYear()
+      const m = String(tx.dateObj.getMonth() + 1).padStart(2, '0')
+      const ym = `${y}-${m}`
+      const cat = tx.category
+      if (!data[cat]) data[cat] = {}
+      data[cat][ym] = (data[cat][ym] || 0) + Math.abs(tx.amount)
+    })
+    return data
+  }, [parsedSpending])
+
+  // Precompute category bucket data (for chart x-axis based on period)
+  const catBucketData = useMemo(() => {
+    const data = {}
+    parsedSpending.forEach(tx => {
+      const bucket = getBucket(tx.dateObj)
+      const cat = tx.category
+      if (!data[cat]) data[cat] = {}
+      data[cat][bucket] = (data[cat][bucket] || 0) + Math.abs(tx.amount)
+    })
+    return data
+  }, [parsedSpending, period])
+
+  // Precompute merchant monthly data (for trends)
+  const merchMonthly = useMemo(() => {
+    const data = {}
+    parsedSpending.forEach(tx => {
+      const name = tx.description || 'Unknown'
+      if (!data[name]) data[name] = {}
+      const y = tx.dateObj.getFullYear()
+      const m = String(tx.dateObj.getMonth() + 1).padStart(2, '0')
+      const ym = `${y}-${m}`
+      data[name][ym] = (data[name][ym] || 0) + Math.abs(tx.amount)
+    })
+    return data
+  }, [parsedSpending])
+
+  // Sorted months (for trend calculations)
   const sortedMonths = useMemo(() => {
     const monthSet = new Set()
     parsedSpending.forEach(tx => {
@@ -113,101 +219,84 @@ export default function Projections({ transactions }) {
     return [...monthSet].sort()
   }, [parsedSpending])
 
-  const nextMonth = sortedMonths.length > 0 ? getNextMonth(sortedMonths[sortedMonths.length - 1]) : null
-
   // Daily-rate projection engine
-  const computeProjections = useMemo(() => {
+  const projections = useMemo(() => {
     const cutoff = new Date(today)
     cutoff.setDate(cutoff.getDate() - lookbackDays)
 
     const windowTxs = parsedSpending.filter(tx => tx.dateObj >= cutoff && tx.dateObj <= today)
 
-    // Group by category
-    const catTotals = {}
-    const merchTotals = {}
-    // Also track monthly values for chart + trend
-    const catMonthly = {}
-    const merchMonthly = {}
-
-    parsedSpending.forEach(tx => {
-      const y = tx.dateObj.getFullYear()
-      const m = String(tx.dateObj.getMonth() + 1).padStart(2, '0')
-      const ym = `${y}-${m}`
-      const amt = Math.abs(tx.amount)
-      const cat = tx.category
-      const merch = tx.description || 'Unknown'
-
-      if (!catMonthly[cat]) catMonthly[cat] = {}
-      catMonthly[cat][ym] = (catMonthly[cat][ym] || 0) + amt
-      if (!merchMonthly[merch]) merchMonthly[merch] = {}
-      merchMonthly[merch][ym] = (merchMonthly[merch][ym] || 0) + amt
-    })
-
+    // Sum by category and merchant in window
+    const catWindowTotals = {}
+    const merchWindowTotals = {}
     windowTxs.forEach(tx => {
       const amt = Math.abs(tx.amount)
-      const cat = tx.category
+      catWindowTotals[tx.category] = (catWindowTotals[tx.category] || 0) + amt
       const merch = tx.description || 'Unknown'
-      catTotals[cat] = (catTotals[cat] || 0) + amt
-      merchTotals[merch] = (merchTotals[merch] || 0) + amt
+      merchWindowTotals[merch] = (merchWindowTotals[merch] || 0) + amt
     })
 
-    const catProjections = Object.entries(catTotals).map(([cat, total]) => {
+    // Category projections — ALL categories, sorted largest to smallest
+    const catProjections = allCategories.map(cat => {
+      const total = catWindowTotals[cat] || 0
       const dailyRate = total / lookbackDays
       const projected = dailyRate * periodDays
-      const values = sortedMonths.map(m => catMonthly[cat]?.[m] || 0)
-      const recent = values.slice(-6)
+      const monthlyValues = sortedMonths.map(m => catMonthly[cat]?.[m] || 0)
+      const recent = monthlyValues.slice(-6)
       const { direction, delta } = trendDirection(recent)
-      return { category: cat, projected, trend: direction, trendDelta: delta, monthlyValues: values }
+      const bucketValues = sortedBuckets.map(b => catBucketData[cat]?.[b] || 0)
+      return { category: cat, projected, trend: direction, trendDelta: delta, bucketValues }
     }).sort((a, b) => b.projected - a.projected)
 
-    const merchProjections = Object.entries(merchTotals).map(([merchant, total]) => {
+    // Merchant projections — ALL qualifying merchants, sorted largest to smallest
+    const merchProjections = allMerchants.map(merchant => {
+      const total = merchWindowTotals[merchant] || 0
       const dailyRate = total / lookbackDays
       const projected = dailyRate * periodDays
-      const values = sortedMonths.map(m => merchMonthly[merchant]?.[m] || 0)
-      const activeMonths = values.filter(v => v > 0).length
-      if (activeMonths < 2) return null
-      const recent = values.slice(-6).filter(v => v > 0)
+      const monthlyValues = sortedMonths.map(m => merchMonthly[merchant]?.[m] || 0)
+      const recent = monthlyValues.slice(-6).filter(v => v > 0)
       const { direction, delta } = trendDirection(recent)
-      return { merchant, projected, trend: direction, trendDelta: delta, activeMonths }
-    }).filter(Boolean).sort((a, b) => b.projected - a.projected)
+      return { merchant, projected, trend: direction, trendDelta: delta }
+    }).sort((a, b) => b.projected - a.projected)
 
-    return { catProjections, merchProjections, catMonthly }
-  }, [parsedSpending, today, lookbackDays, periodDays, sortedMonths])
+    return { catProjections, merchProjections }
+  }, [parsedSpending, today, lookbackDays, periodDays, allCategories, allMerchants, sortedMonths, catMonthly, sortedBuckets, catBucketData, merchMonthly])
 
-  const { catProjections, merchProjections, catMonthly } = computeProjections
+  const { catProjections, merchProjections } = projections
   const totalProjected = catProjections.reduce((sum, p) => sum + p.projected, 0)
 
-  /* Chart: historical monthly bars + projected bar */
+  /* Chart: historical buckets + projected bar for ALL categories */
   const chartData = useMemo(() => {
-    if (sortedMonths.length < 2 || catProjections.length === 0) return null
-    const displayMonths = [...sortedMonths.slice(-6), nextMonth]
-    const topCats = catProjections.slice(0, 6)
+    if (sortedBuckets.length < 2 || catProjections.length === 0) return null
+    const displayBuckets = [...sortedBuckets.slice(-6), nextBucket]
 
-    const datasets = topCats.map(cp => {
-      const colour = getCategoryColour(cp.category)
-      return {
-        label: cp.category,
-        data: displayMonths.map((m, i) => {
-          if (i === displayMonths.length - 1) return cp.projected
-          const monthly = catMonthly[cp.category]
-          return monthly?.[m] || 0
-        }),
-        backgroundColor: displayMonths.map((_, i) =>
-          i === displayMonths.length - 1
-            ? colour.replace(/[\d.]+\)$/, '0.35)')
-            : colour
-        ),
-        borderColor: colour,
-        borderWidth: displayMonths.map((_, i) => i === displayMonths.length - 1 ? 2 : 0),
-        borderDash: displayMonths.map((_, i) => i === displayMonths.length - 1 ? [4, 4] : []),
-      }
-    })
+    const datasets = catProjections
+      .filter(cp => cp.projected > 0 || cp.bucketValues.some(v => v > 0))
+      .map(cp => {
+        const colour = getCategoryColour(cp.category)
+        return {
+          label: cp.category,
+          data: displayBuckets.map((b, i) => {
+            if (i === displayBuckets.length - 1) return cp.projected
+            const bIdx = sortedBuckets.indexOf(b)
+            return bIdx >= 0 ? (cp.bucketValues[bIdx] || 0) : 0
+          }),
+          backgroundColor: displayBuckets.map((_, i) =>
+            i === displayBuckets.length - 1
+              ? colour.replace(/[\d.]+\)$/, '0.35)')
+              : colour
+          ),
+          borderColor: colour,
+          borderWidth: displayBuckets.map((_, i) => i === displayBuckets.length - 1 ? 2 : 0),
+          borderDash: displayBuckets.map((_, i) => i === displayBuckets.length - 1 ? [4, 4] : []),
+        }
+      })
 
     return {
-      labels: displayMonths.map((m, i) => i === displayMonths.length - 1 ? `${formatMonth(m)} (proj.)` : formatMonth(m)),
+      labels: displayBuckets.map((b, i) => i === displayBuckets.length - 1 ? `${formatBucket(b)} (proj.)` : formatBucket(b)),
       datasets,
     }
-  }, [sortedMonths, catProjections, nextMonth, catMonthly])
+  }, [sortedBuckets, catProjections, nextBucket, period])
 
   /* Not enough data */
   if (sortedMonths.length < 2) {
@@ -220,55 +309,32 @@ export default function Projections({ transactions }) {
     )
   }
 
-  const lookbackLabel = LOOKBACK_OPTIONS.find(o => o.value === lookback).label
-
-  const ToggleBar = ({ showLookback = true, showPeriod = true }) => (
-    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-      {showLookback && (
-        <div className="period-toggle">
-          {LOOKBACK_OPTIONS.map(opt => (
-            <button
-              key={opt.value}
-              className={`period-btn ${lookback === opt.value ? 'period-btn--active' : ''}`}
-              onClick={() => setLookback(opt.value)}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      )}
-      {showPeriod && (
-        <div className="period-toggle">
-          {PERIOD_OPTIONS.map(opt => (
-            <button
-              key={opt.value}
-              className={`period-btn ${period === opt.value ? 'period-btn--active' : ''}`}
-              onClick={() => setPeriod(opt.value)}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-
   return (
     <div className="section-stack">
       {/* Header */}
       <div className="glass-panel glass-panel--accent kpi-card projections-header" style={{ textAlign: 'center' }}>
         <div className="kpi-label">
-          Projected {periodLabel} Spending — {formatMonth(nextMonth)}
-          <InfoTooltip text={`Projections use a daily-rate model: total spending in the ${lookbackLabel} window ÷ calendar days, then scaled to the selected period. Change the lookback window and period below.`} />
+          Projected {periodLabel} Spending — {formatBucket(nextBucket)}
+          <InfoTooltip text={PROJECTION_FORMULA_TOOLTIP} />
         </div>
         <div className="kpi-value kpi-value--danger text-mono">
           <span className="value-negative">£{totalProjected.toFixed(2)}</span>
         </div>
         <div className="kpi-sublabel">
-          Based on {lookbackLabel} lookback window • {sortedMonths.length} months of data ({formatMonth(sortedMonths[0])} – {formatMonth(sortedMonths[sortedMonths.length - 1])})
+          Based on {lookbackDays}-day lookback • {sortedMonths.length} months of data ({formatMonth(sortedMonths[0])} – {formatMonth(sortedMonths[sortedMonths.length - 1])})
         </div>
         <div style={{ marginTop: '0.75rem', display: 'flex', justifyContent: 'center' }}>
-          <ToggleBar />
+          <div className="period-toggle">
+            {PERIOD_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                className={`period-btn ${period === opt.value ? 'period-btn--active' : ''}`}
+                onClick={() => setPeriod(opt.value)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -320,17 +386,17 @@ export default function Projections({ transactions }) {
         </div>
       )}
 
-      {/* Category projections table */}
+      {/* Category projections */}
       <div className="glass-panel glass-panel--static panel-body">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
           <h3 className="section-title" style={{ marginBottom: 0 }}>
             📊 By Category
-            <InfoTooltip text={`Projected cost per category using daily-rate model over ${lookbackLabel} window, scaled to ${periodLabel.toLowerCase()} period. Trend compares the last two months.`} />
+            <InfoTooltip text={`Projected cost per category. Daily rate (from ${lookbackDays}-day window) × ${periodDays} days. All categories shown — £0.00 means no spending detected in the lookback window.`} />
           </h3>
         </div>
         <div>
           {catProjections.map(cp => {
-            const pct = totalProjected > 0 ? ((cp.projected / totalProjected) * 100).toFixed(1) : 0
+            const pct = totalProjected > 0 ? ((cp.projected / totalProjected) * 100).toFixed(1) : '0.0'
             return (
               <div key={cp.category} className="rank-row">
                 <div className="rank-left">
@@ -340,7 +406,7 @@ export default function Projections({ transactions }) {
                 </div>
                 <div className="rank-right">
                   <span className="rank-pct">{pct}%</span>
-                  <span className="rank-amount">£{cp.projected.toFixed(2)}{periodSuffix}</span>
+                  <span className="rank-amount">£{cp.projected.toFixed(2)}</span>
                 </div>
               </div>
             )
@@ -348,11 +414,11 @@ export default function Projections({ transactions }) {
         </div>
       </div>
 
-      {/* Merchant projections table */}
+      {/* Merchant projections */}
       <div className="glass-panel glass-panel--static panel-body">
         <h3 className="section-title" style={{ marginBottom: '1rem' }}>
           🏪 By Merchant
-          <InfoTooltip text={`Merchants by projected ${periodLabel.toLowerCase()} cost using daily-rate model over ${lookbackLabel} window. Only merchants appearing in 2+ months are included.`} />
+          <InfoTooltip text={`Merchants by projected ${periodLabel.toLowerCase()} cost. Same daily-rate formula applied. Only merchants with 2+ months of activity are shown.`} />
         </h3>
         <div>
           {merchProjections.map((mp, i) => (
@@ -363,7 +429,7 @@ export default function Projections({ transactions }) {
                 <TrendBadge direction={mp.trend} delta={mp.trendDelta} />
               </div>
               <div className="rank-right">
-                <span className="rank-amount">£{mp.projected.toFixed(2)}{periodSuffix}</span>
+                <span className="rank-amount">£{mp.projected.toFixed(2)}</span>
               </div>
             </div>
           ))}
