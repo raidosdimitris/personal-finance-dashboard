@@ -1947,3 +1947,11 @@ h1, h2, h3 {
 .info-tooltip-content {
   white-space: pre-line;
 }
+
+/* Fixed-position tooltip — renders above everything regardless of stacking context */
+.info-tooltip-content--fixed {
+  display: block;
+  position: fixed;
+  transform: translateX(-50%) translateY(-100%);
+  z-index: 9999;
+}

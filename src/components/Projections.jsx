@@ -16,10 +16,26 @@ import { getCategoryColour } from '../utils/categoriser'
 ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, Title, Tooltip, Legend)
 
 function InfoTooltip({ text }) {
+  const [pos, setPos] = useState(null)
+
+  const handleEnter = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    setPos({ top: rect.top - 8, left: rect.left + rect.width / 2 })
+  }
+  const handleLeave = () => setPos(null)
+
   return (
-    <span className="info-tooltip-wrap">
+    <span className="info-tooltip-wrap" onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
       <span className="info-tooltip-trigger" aria-label="More information">?</span>
-      <span className="info-tooltip-content" role="tooltip">{text}</span>
+      {pos && (
+        <span
+          className="info-tooltip-content info-tooltip-content--fixed"
+          role="tooltip"
+          style={{ top: pos.top, left: pos.left }}
+        >
+          {text}
+        </span>
+      )}
     </span>
   )
 }
