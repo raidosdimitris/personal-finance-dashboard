@@ -25,12 +25,20 @@ export function normaliseDate(dateStr) {
 
   const str = String(dateStr).trim()
 
-  // M/D/YY or M/D/YYYY (US format from xlsx raw:false)
-  const usMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/)
-  if (usMatch) {
-    let [, month, day, year] = usMatch
+  // DD/MM/YYYY (UK) or M/D/YYYY (US) — detect by checking if first number > 12
+  const slashMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/)
+  if (slashMatch) {
+    let [, a, b, year] = slashMatch
     if (year.length === 2) {
       year = parseInt(year) > 50 ? '19' + year : '20' + year
+    }
+    let day, month
+    if (parseInt(a) > 12) {
+      day = a; month = b  // UK: DD/MM/YYYY
+    } else if (parseInt(b) > 12) {
+      month = a; day = b  // US: MM/DD/YYYY
+    } else {
+      day = a; month = b  // Ambiguous — assume UK
     }
     return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
   }
